@@ -760,77 +760,168 @@
 })();
 
 
+// --- Part 2: Text Link to Hyperlink Enhancement (Corrected cleanUrl) ---
 (function() {
     'use strict';
 
-    // Text link recognition regex (slightly improved character set for path/query/fragment)
-    // Allows more common characters found in URLs like Baidu Pan, Quark Pan links etc.
-    const urlRegex = /https?:\/\/[\w.-]+\.\w+(?::\d{1,5})?(?:\/[#%&?./=\w\-@+,;!*'()]*)?/g;
+    /**
+     * Cleans specific noise (chars, bracketed text, emojis, invisible chars) from a potential URL string.
+     * Keeps alphanumeric characters and standard URL symbols intact.
+     * @param {string} noisyUrl - The URL string potentially containing noise.
+     * @returns {string} The cleaned URL string.
+     */
+    function cleanUrl(noisyUrl) {
+        // Make sure we are working with a string
+        if (typeof noisyUrl !== 'string') {
+            return noisyUrl; // Return original if not a string
+        }
+
+        // 1. Remove the specific character '删'
+        let cleaned = noisyUrl.replace(/删/g, '');
+
+        // 2. Remove bracketed text like [开心], [OK], etc. Matches '[' followed by one or more non-']' chars, then ']'
+        cleaned = cleaned.replace(/\[[^\]]+?\]/g, ''); // Added '?' for non-greedy match, though effect might be minimal here
+
+        // 3. Remove standard Unicode Emojis (using Unicode property escapes with the 'u' flag)
+        //    Be mindful: this is broad and might remove symbols if they fall into emoji ranges.
+         try {
+             // Use try-catch as \p{Emoji} might not be supported in very old environments
+             cleaned = cleaned.replace(/\p{Emoji_Presentation}|\p{Extended_Pictographic}/gu, '');
+             // More specific emoji properties might reduce unintended removals compared to just \p{Emoji}
+         } catch (e) {
+             console.warn("[网盘智能识别助手] Emoji regex cleaning failed (possibly unsupported):", e);
+             // Fallback or skip emoji cleaning if regex fails
+         }
+
+
+        // 4. Remove potential zero-width spaces or similar invisible formatting chars
+        cleaned = cleaned.replace(/[\u200B-\u200D\uFEFF]/g, '');
+
+        // 5. Remove any remaining isolated square brackets that might be left if the content was complex
+        //    (e.g., if the regex in step 2 didn't catch nested or malformed brackets perfectly)
+        // cleaned = cleaned.replace(/[\[\]]/g, ''); // Optional: Uncomment if stray brackets remain
+
+        // 6. Ensure protocol exists (add https:// if missing and looks like a domain)
+        if (!/^https?:\/\//i.test(cleaned)) {
+            // Check if it looks like a domain name start potentially followed by path etc.
+             // Basic check: starts with word chars/hyphen/dot, then a dot, then word chars
+            if (/^[\w.-]+\.[a-zA-Z]{2,}/i.test(cleaned)) {
+               cleaned = 'https://' + cleaned;
+            }
+        }
+        return cleaned;
+    }
+
+
+    // Text link recognition regex: Enhanced to allow more characters within the path/query/fragment,
+    // including Chinese characters, brackets, and emojis, without breaking the match.
+    // The 'u' flag enables Unicode property escapes. Needs careful crafting.
+    // Strategy: Match 'http(s)://' followed by domain, then be more permissive with path/query/fragment
+    // Allows CJK chars, emoji, brackets, '删', etc., within the path/query/fragment part.
+    const urlRegex = /https?:\/\/[\w.-]+\.[a-zA-Z]{2,}(?::\d{1,5})?(?:[/?#][^\s<>"]*)?/gu;
+    // Explanation:
+    // https?:\/\/          - Match http:// or https://
+    // [\w.-]+             - Match domain name part (letters, numbers, underscore, dot, hyphen)
+    // \.[a-zA-Z]{2,}       - Match top-level domain (like .com, .cn) - minimum 2 letters
+    // (?::\d{1,5})?        - Optionally match port number
+    // (?:[/?#][^\s<>"]*)? - Optionally match path/query/fragment:
+    //    [/?#]            - Must start with /, ? or #
+    //    [^\s<>"]*        - Match any character except whitespace, <, > or " (to avoid breaking HTML)
+
 
     // Ignored tag names (uppercase) - Avoid processing links within these tags
     const ignoredTags = new Set(['SCRIPT', 'STYLE', 'A', 'TEXTAREA', 'NOSCRIPT', 'CODE', 'TITLE', 'PRE', 'BUTTON', 'INPUT', 'SELECT']);
 
-    // Keep track of processed text nodes within a mutation cycle to avoid potential loops with observers
-    // Using a WeakSet helps with garbage collection if nodes are removed
+    // Keep track of processed text nodes within a mutation cycle
     const processedNodes = new WeakSet();
 
-    function createHyperlink(url) {
+    function createBaseHyperlink() {
         const a = document.createElement('a');
-        a.href = url;
-        a.textContent = url; // Display the URL as the link text by default
         a.target = '_blank'; // Open in new tab
         a.style.wordBreak = 'break-all'; // Help prevent long URLs from breaking layout
-        // Add rel="noopener noreferrer" for security when using target="_blank"
-        a.rel = 'noopener noreferrer';
-
-        // === 添加下面这行来设置颜色 ===
-        a.style.color = '#55aaff'; // 设置为淡蓝色 (你可以根据喜好调整色值)
-        // 或者使用名字: a.style.color = 'deepskyblue';
-
+        a.rel = 'noopener noreferrer'; // Security for target="_blank"
+        a.style.color = '#55aaff'; // Set link color (e.g., light blue)
         return a;
     }
 
     function processTextNode(node) {
-        // Skip if already processed in this cycle or not a text node
-        if (processedNodes.has(node) || node.nodeType !== Node.TEXT_NODE) {
+        if (processedNodes.has(node) || node.nodeType !== Node.TEXT_NODE || !node.nodeValue?.trim()) {
             return;
         }
 
-        // Check parent hierarchy: ignore if inside ignored tags or contenteditable
         let parent = node.parentNode;
         if (!parent) return; // Node is detached
 
-        while (parent && parent !== document.body) {
-             // Check nodeName and if element is editable
-            if (ignoredTags.has(parent.nodeName) || parent.isContentEditable) {
+        // Check parent hierarchy for ignored tags or editable content
+        let currentParent = parent;
+        while (currentParent && currentParent !== document.body) {
+            if (ignoredTags.has(currentParent.nodeName) || currentParent.isContentEditable) {
                 return; // Skip this text node
             }
-            parent = parent.parentNode;
+            currentParent = currentParent.parentNode;
         }
-         // Ensure parent traversal completed successfully up to body or document root
-        if (!parent) return;
+        if (!currentParent) return; // Structure issue or node not under body
 
         const text = node.nodeValue;
-        urlRegex.lastIndex = 0; // Reset regex state before each use
+        urlRegex.lastIndex = 0; // Reset regex state
         let match;
         let lastIndex = 0;
         const fragment = document.createDocumentFragment();
         let foundLink = false;
 
         while ((match = urlRegex.exec(text)) !== null) {
-            foundLink = true;
-            const url = match[0];
+            const noisyMatch = match[0]; // The full string matched, including noise
             const matchIndex = match.index;
+
+             // --- Advanced Check: Prevent partial matches within existing URLs ---
+             // Check if the character *before* the match index is part of a URL allowed set
+             // This helps avoid matching 'google.com' inside 'http://google.com' if regex isn't perfect
+            if (matchIndex > 0) {
+                 const prevChar = text[matchIndex - 1];
+                 // If previous char is alphanumeric, /, :, ?, #, &, =, ., - maybe it's part of a larger URL missed?
+                 // This is heuristic, adjust allowed preceding chars as needed.
+                 if (/[\w/:?#&=.-]/.test(prevChar)) {
+                     // Potential overlap or part of a larger structure, skip this match instance
+                     // and continue searching from the end of this potential false positive.
+                     // urlRegex.lastIndex = matchIndex + 1; // Adjust search position cautiously
+                     // For simplicity now, let's just log and potentially skip, complex avoidance is hard.
+                     // console.debug("Skipping potential partial match:", noisyMatch);
+                     // Continue to next potential match without advancing lastIndex here
+                     continue;
+                 }
+            }
+             // --- End Advanced Check ---
+
+
+            foundLink = true; // Mark that we found at least one link in this node
 
             // Add text before the match (if any)
             if (matchIndex > lastIndex) {
                 fragment.appendChild(document.createTextNode(text.substring(lastIndex, matchIndex)));
             }
 
-            // Create and add the hyperlink
-            fragment.appendChild(createHyperlink(url));
+            // --- Core Change Here ---
+            const cleanedHref = cleanUrl(noisyMatch);
+            // Basic validation: Check if cleaning resulted in something that still looks like a URL
+             if (cleanedHref && cleanedHref.includes('://')) { // Simple check
+                const a = createBaseHyperlink();
+                a.href = cleanedHref;           // Set the actual destination to the cleaned URL
+                a.textContent = noisyMatch;     // Display the original text with noise
+                a.title = `打开链接 (清理后: ${cleanedHref})`; // Show cleaned URL on hover
+                fragment.appendChild(a);
+            } else {
+                 // If cleaning failed or produced invalid URL, append the original text instead of a link
+                 console.warn(`[网盘智能识别助手] Cleaning failed for: ${noisyMatch}, result: ${cleanedHref}`);
+                 fragment.appendChild(document.createTextNode(noisyMatch));
+            }
+            // --- End Core Change ---
 
             lastIndex = urlRegex.lastIndex;
+
+             // Avoid infinite loop on zero-length matches or immediate re-match
+             if (match.index === urlRegex.lastIndex) {
+                urlRegex.lastIndex++;
+            }
         }
 
         // If links were found, replace the original text node with the fragment
@@ -841,28 +932,59 @@
             }
 
             // Replace the original node with the fragment containing text and links
-            node.parentNode.replaceChild(fragment, node);
-
-            // Mark the original node as processed (though it's now removed, helps if observer picks it up before removal)
-             processedNodes.add(node);
-
+            try {
+                 if (node.parentNode) { // Check if still attached before replacing
+                    node.parentNode.replaceChild(fragment, node);
+                    processedNodes.add(node); // Mark original node (logically processed)
+                 }
+            } catch (e) {
+                console.warn('[网盘智能识别助手] Error replacing text node:', e);
+                // Log error but continue if possible
+            }
         } else {
             // Mark as processed even if no link found, to avoid re-checking static text frequently
-            processedNodes.add(node);
+             processedNodes.add(node);
         }
     }
 
     function scanForLinks(rootNode) {
-        // Use TreeWalker for efficient iteration over text nodes only
+        // Use TreeWalker for efficiency
         const walker = document.createTreeWalker(
             rootNode,
-            NodeFilter.SHOW_TEXT, // Only consider text nodes
-            null, // No custom filter logic needed here
-            false // Does not expand entity references
+            NodeFilter.SHOW_TEXT,
+            { // Custom filter to quickly reject nodes inside ignored tags
+                acceptNode: function(node) {
+                    let parent = node.parentNode;
+                    while (parent && parent !== rootNode && parent !== document.body) {
+                        if (ignoredTags.has(parent.nodeName) || parent.isContentEditable) {
+                            return NodeFilter.FILTER_REJECT; // Reject node and its subtree
+                        }
+                        parent = parent.parentNode;
+                    }
+                    // Also reject if the rootNode itself is ignored/editable
+                     if (rootNode.nodeType === Node.ELEMENT_NODE && (ignoredTags.has(rootNode.nodeName) || rootNode.isContentEditable)) {
+                        return NodeFilter.FILTER_REJECT;
+                    }
+                    // Check if the immediate parent is an 'A' tag
+                    if (node.parentNode && node.parentNode.nodeName === 'A') {
+                       return NodeFilter.FILTER_REJECT;
+                    }
+
+                    if (node.nodeValue && node.nodeValue.trim().length > 0) {
+                         // Basic check: Does it contain potentially relevant characters?
+                         // This is a weak pre-filter, might remove later if it causes issues.
+                         // if (node.nodeValue.includes('.') || node.nodeValue.includes('/') || node.nodeValue.includes(':')) {
+                            return NodeFilter.FILTER_ACCEPT;
+                         // }
+                    }
+                    return NodeFilter.FILTER_SKIP; // Skip empty nodes or those not passing pre-filter
+                }
+            },
+            false
         );
 
         let node;
-        // Collect nodes first, then process. Avoids issues if DOM changes during iteration.
+        // Collect nodes first to avoid issues with DOM modification during traversal
         const nodesToProcess = [];
         while (node = walker.nextNode()) {
            nodesToProcess.push(node);
@@ -873,76 +995,99 @@
     }
 
     // Initial scan when the document is idle
-    if (document.readyState === 'complete' || document.readyState === 'interactive') {
-        scanForLinks(document.body);
+    if (document.body) { // Ensure body exists
+       scanForLinks(document.body);
     } else {
-        document.addEventListener('DOMContentLoaded', () => scanForLinks(document.body), { once: true });
+       document.addEventListener('DOMContentLoaded', () => scanForLinks(document.body), { once: true });
     }
 
 
     // Observe mutations to handle dynamically added content
     const observer = new MutationObserver(mutations => {
-        // Use a Set to efficiently track nodes needing scanning from this batch of mutations
-        const nodesToScan = new Set();
+        // Use a Set to efficiently track nodes/subtrees needing scanning from this batch
+        const rootsToScan = new Set();
 
         mutations.forEach(mutation => {
             if (mutation.type === 'childList') {
                 mutation.addedNodes.forEach(newNode => {
-                    // If the new node itself is a text node, process it directly
-                    if (newNode.nodeType === Node.TEXT_NODE) {
-                       processTextNode(newNode); // Direct processing attempt
+                    // If the new node itself is a text node, try processing its parent unless ignored
+                    if (newNode.nodeType === Node.TEXT_NODE && newNode.parentNode) {
+                        let parent = newNode.parentNode;
+                        let ignore = false;
+                         while(parent && parent !== document.body) {
+                             if(ignoredTags.has(parent.nodeName) || parent.isContentEditable) { ignore = true; break; }
+                             parent = parent.parentNode;
+                         }
+                         if(!ignore && newNode.parentNode.nodeType === Node.ELEMENT_NODE) rootsToScan.add(newNode.parentNode);
+                         else if (!ignore) processTextNode(newNode); // Process directly if parent check inconclusive/not element
+
                     }
-                    // If the new node is an element, add it to the set to scan its descendants
+                    // If the new node is an element, add it to the set to scan its descendants, if not ignored
                     else if (newNode.nodeType === Node.ELEMENT_NODE) {
-                       // Check if the element itself should be ignored
-                        let tempParent = newNode;
+                        let parent = newNode;
                         let ignoreSubtree = false;
-                        while(tempParent && tempParent !== document.body) {
-                           if(ignoredTags.has(tempParent.nodeName) || tempParent.isContentEditable) {
+                        while(parent && parent !== document.body) {
+                           if(ignoredTags.has(parent.nodeName) || parent.isContentEditable) {
                               ignoreSubtree = true;
                               break;
                            }
-                           tempParent = tempParent.parentNode;
+                           parent = parent.parentNode;
                         }
-                        if (!ignoreSubtree && newNode.parentNode) { // Ensure it's connected and not ignored
-                           nodesToScan.add(newNode);
+                        if (!ignoreSubtree) {
+                           rootsToScan.add(newNode);
                         }
                     }
                 });
             }
-            // Optional: Handle direct text changes if necessary
-            // else if (mutation.type === 'characterData' && mutation.target.nodeType === Node.TEXT_NODE) {
-            //     processTextNode(mutation.target);
-            // }
+            // Handle direct text changes within existing nodes
+            else if (mutation.type === 'characterData' && mutation.target.nodeType === Node.TEXT_NODE) {
+                 // Process the text node directly if it hasn't been processed recently
+                 // Or re-scan its parent element for safety/context
+                 if(mutation.target.parentNode) {
+                     let parent = mutation.target.parentNode;
+                     let ignore = false;
+                     while(parent && parent !== document.body) {
+                          if(ignoredTags.has(parent.nodeName) || parent.isContentEditable || parent.nodeName === 'A') {
+                              ignore = true; break;
+                           }
+                           parent = parent.parentNode;
+                     }
+                     if (!ignore && mutation.target.parentNode.nodeType === Node.ELEMENT_NODE) {
+                        rootsToScan.add(mutation.target.parentNode); // Prefer scanning parent
+                     } else if (!ignore) {
+                         processTextNode(mutation.target); // Fallback to direct process
+                     }
+                 } else {
+                     processTextNode(mutation.target); // Process if no parent (e.g., during creation)
+                 }
+            }
         });
 
-        // Scan the unique elements that were added
-        nodesToScan.forEach(node => scanForLinks(node));
+        // Scan the unique elements/roots that were affected
+        rootsToScan.forEach(node => scanForLinks(node));
 
-        // Clear the processed set after each mutation batch handling is complete
-        // Note: This WeakSet approach might need refinement depending on interaction complexity.
-        // If issues persist, a different strategy (e.g., adding a data-attribute) might be needed.
-        // For now, clearing per batch assumes nodes processed are stable until next mutation.
-        // Re-introduce processedNodes clearing if needed, but start without it.
-        // processedNodes = new WeakSet(); // Reset for next mutation cycle if causing issues
+        // Clearing processedNodes WeakSet is generally not needed per batch due to its nature,
+        // but if re-processing loops occur, uncommenting might be a debug step.
+        // processedNodes = new WeakSet();
     });
 
-    // Start observing the body for additions and subtree modifications
+    // Start observing the body for additions, subtree modifications, and text changes
      if (document.body) {
       observer.observe(document.body, {
-          childList: true, // Watch for added/removed nodes
-          subtree: true// Watch descendants
-          // characterData: true // Add if needed to detect changes within existing text nodes
+          childList: true,    // Watch for added/removed nodes
+          subtree: true,      // Watch descendants
+          characterData: true // Watch for changes within existing text nodes
       });
      } else {
-       // Fallback if body isn't available yet (though document-idle should prevent this)
+       // Fallback if body isn't available yet
        document.addEventListener('DOMContentLoaded', () => {
-         observer.observe(document.body, { childList: true, subtree: true });
+         if(document.body) { // Double check body exists
+             observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+         }
        }, { once: true });
      }
 
-
-    // Optional: Cleanup observer on page unload (useful in SPAs or if script needs manual stopping)
+    // Optional: Cleanup observer on page unload
     // window.addEventListener('unload', () => observer.disconnect());
 
-})();
+})(); 
