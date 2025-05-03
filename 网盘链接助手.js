@@ -1,50 +1,24 @@
 // ==UserScript==
 // @name         网盘链接自动识别补全 (Cloud Drive Link Helper)
 // @namespace    http://tampermonkey.net/
-// @version      1.4
-// @description  自动识别(网盘/通用链接)、清理、补全网盘分享链接，处理干扰字符，弹出选择框，复制/尝试自动填充提取码。整合更多网盘支持。
-// @author       Gemini & You & Ref Scripts
+// @version      1.3
+// @description  自动识别、清理、补全网盘分享链接(支持完整URL)，处理干扰字符，弹出选择框，复制/尝试自动填充提取码。
+// @author       Gemini & You
 // @match        *://*/*
 // @match        *://pan.baidu.com/s/*
 // @match        *://*.123pan.com/s/*
 // @match        *://*.aliyundrive.com/s/*
 // @match        *://*.quark.cn/s/*
-// @match        *://share.weiyun.com/*
-// @match        *://*.lanzou*.com/*
-// @match        *://*.lanzn.com/*
-// @match        *://cloud.189.cn/*
-// @match        *://*.139.com/*
-// @match        *://pan.xunlei.com/s/*
-// @match        *://*.yunpan.360.cn/*
-// @match        *://*.yunpan.com/*
-// @match        *://115.com/s/*
-// @match        *://*.cowtransfer.com/s/*
-// @match        *://*.ctfile.com/*
-// @match        *://*.545c.com/*
-// @match        *://*.u062.com/*
-// @match        *://*.ghpym.com/*
-// @match        *://vdisk.weibo.com/lc/*
-// @match        *://*.wenshushu.cn/*
-// @match        *://drive.uc.cn/s/*
-// @match        *://*.jianguoyun.com/p/*
-// @match        *://pan.wo.cn/s/*
-// @match        *://*.mega.nz/*
-// @match        *://*.mega.co.nz/*
-// @match        *://flowus.cn/*share/*
-// @exclude      *://pan.baidu.com/disk/home*
+// @exclude      *://pan.baidu.com/disk/home* // 排除网盘主页等非分享页面
 // @exclude      *://*.123pan.com/folder*
 // @exclude      *://*.aliyundrive.com/drive*
 // @exclude      *://*.quark.cn/list*
-// @exclude      *://*.google.com/* // 避免在搜索结果页过多处理
-// @exclude      *://*.bing.com/*
-// @exclude      *://*.baidu.com/* // 排除搜索引擎主域，但保留 pan.baidu.com/s/*
 // @grant        GM_addStyle
 // @grant        GM_setClipboard
 // @grant        GM_notification
 // @grant        GM_setValue
 // @grant        GM_getValue
-// @grant        GM_openInTab
-// @run-at       document-start // Changed to document-start for general link processing
+// @run-at       document-idle
 // @license      MIT
 // ==/UserScript==
 
@@ -52,146 +26,158 @@
     'use strict';
 
     // --- Configuration ---
-    // Merged providers from user feedback and reference script
     const providers = {
-        baidu: { name: "百度网盘", domain: "https://pan.baidu.com", pathPrefix: "/s/", reg: /((?:https?:\/\/)?(?:e?yun|pan)\.baidu\.com\/(?:doc\/|enterprise\/)?(?:s\/[\w~]*((?:-)?\w*)*|share\/\S{4,}))/, host: /(pan|e?yun)\.baidu\.com/, pwdParam: "pwd", pwdLength: 4, inputSelector: '#pwd, .share-access-code, #wpdoc-share-page > .u-dialog__wrapper .u-input__inner', submitSelector: '#submitBtn, .share-access .g-button, #wpdoc-share-page > .u-dialog__wrapper .u-btn--primary', storage: 'hash' },
-        aliyun: { name: "阿里云盘", domain: "https://www.aliyundrive.com", pathPrefix: "/s/", reg: /((?:https?:\/\/)?(?:(?:www\.)?(?:aliyundrive|alipan)\.com\/s|alywp\.net)\/[a-zA-Z\d]+)/, host: /www\.(aliyundrive|alipan)\.com|alywp\.net/, inputSelector: 'form .ant-input, form input[type="text"], input[name="pwd"]', submitSelector: 'form .button--fep7l, form button[type="submit"]', storage: 'hash' },
-        weiyun: { name: "腾讯微云", domain: "https://share.weiyun.com", pathPrefix: "/", reg: /((?:https?:\/\/)?share\.weiyun\.com\/[a-zA-Z\d]+)/, host: /share\.weiyun\.com/, inputSelector: '.mod-card-s input[type=password], input.pw-input', submitSelector: '.mod-card-s .btn-main, .pw-btn-wrap button.btn', storage: 'hash' },
-        lanzou: { name: "蓝奏云", domain: "https://www.lanzoui.com", pathPrefix: "/", reg: /((?:https?:\/\/)?(?:[a-zA-Z0-9\-.]+)?(?:lanzou[a-z]|lanzn)\.com\/[a-zA-Z\d_\-]+(?:\/[\w-]+)?)/, host: /(?:[a-zA-Z\d-.]+)?(?:lanzou[a-z]|lanzn)\.com/, inputSelector: '#pwd', submitSelector: '.passwddiv-btn, #sub', storage: 'hash' }, // Domain is example, host regex covers variations
-        tianyi: { name: "天翼云盘", domain: "https://cloud.189.cn", pathPrefix: "/", reg: /((?:https?:\/\/)?cloud\.189\.cn\/(?:t\/|web\/share\?code=)?[a-zA-Z\d]+)/, host: /cloud\.189\.cn/, inputSelector: '.access-code-item #code_txt, input.access-code-input', submitSelector: '.access-code-item .visit, .button', storage: 'hash', storagePwdName: 'tmp_tianyi_pwd' }, // Storage type might depend on mobile/desktop, defaulting to hash
-        caiyun: { name: "移动云盘", domain: "https://caiyun.139.com", pathPrefix: "/", reg: /((?:https?:\/\/)?caiyun\.139\.com\/(?:m\/i|w\/i\/|web\/|front\/#\/detail)\??(?:linkID=)?[a-zA-Z\d]+)/, host: /(?:cai)?yun\.139\.com/, inputSelector: '.token-form input[type=text]', submitSelector: '.token-form .btn-token', storage: 'local', storagePwdName: 'tmp_caiyun_pwd' },
-        xunlei: { name: "迅雷云盘", domain: "https://pan.xunlei.com", pathPrefix: "/s/", reg: /((?:https?:\/\/)?pan\.xunlei\.com\/s\/[\w-]{10,})/, host: /pan\.xunlei\.com/, inputSelector: '.pass-input-wrap .td-input__inner', submitSelector: '.pass-input-wrap .td-button', storage: 'hash' },
-        pan123: { name: "123云盘", domain: "https://www.123pan.com", pathPrefix: "/s/", reg: /((?:https?:\/\/)?www\.123pan\.com\/s\/[\w-]{6,})/, host: /www\.123pan\.com/, inputSelector: '.ca-fot input, .appinput .appinput', submitSelector: '.ca-fot button, .appinput button', storage: 'hash' },
-        pan360: { name: "360云盘", domain: "https://yunpan.360.cn", pathPrefix: "/", reg: /((?:https?:\/\/)?(?:[a-zA-Z\d\-.]+)?(?:yunpan\.360\.cn|yunpan\.com)(?:\/lk)?\/surl_\w{6,})/, host: /[\w.]+?yunpan\.com/, inputSelector: '.pwd-input', submitSelector: '.submit-btn', storage: 'local', storagePwdName: 'tmp_360_pwd' },
-        pan115: { name: "115网盘", domain: "https://115.com", pathPrefix: "/s/", reg: /((?:https?:\/\/)?115\.com\/s\/[a-zA-Z\d]+)/, host: /115\.com/, inputSelector: '.form-decode input', submitSelector: '.form-decode .submit a', storage: 'hash' },
-        cowtransfer: { name: "奶牛快传", domain: "https://cowtransfer.com", pathPrefix: "/s/", reg: /((?:https?:\/\/)?(?:[a-zA-Z\d-.]+)?cowtransfer\.com\/s\/[a-zA-Z\d]+)/, host: /(?:[a-zA-Z\d-.]+)?cowtransfer\.com/, inputSelector: '.receive-code-input input', submitSelector: '.open-button', storage: 'hash' },
-        ctfile: { name: "城通网盘", domain: "https://www.ctfile.com", pathPrefix: "/", reg: /((?:https?:\/\/)?(?:[a-zA-Z\d-.]+)?(?:ctfile|545c|u062|ghpym)\.com\/\w+\/[a-zA-Z\d-]+)/, host: /(?:[a-zA-Z\d-.]+)?(?:ctfile|545c|u062)\.com/, inputSelector: '#passcode', submitSelector: '.card-body button', storage: 'hash' },
-        quark: { name: "夸克网盘", domain: "https://pan.quark.cn", pathPrefix: "/s/", reg: /((?:https?:\/\/)?pan\.quark\.cn\/s\/[a-zA-Z\d-]+)/, host: /pan\.quark\.cn/, inputSelector: '.ant-input', submitSelector: '.ant-btn-primary', storage: 'local', storagePwdName: 'tmp_quark_pwd' },
-        vdisk: { name: "新浪微盘", domain: "https://vdisk.weibo.com", pathPrefix: "/lc/", reg: /((?:https?:\/\/)?vdisk.weibo.com\/lc\/\w+)/, host: /vdisk\.weibo\.com/, inputSelector: '#keypass, #access_code', submitSelector: '.search_btn_wrap a, #linkcommon_btn', storage: 'hash' },
-        wenshushu: { name: "文叔叔", domain: "https://www.wenshushu.cn", pathPrefix: "/", reg: /((?:https?:\/\/)?(?:www\.wenshushu|ws28)\.cn\/(?:k|box|f)\/\w+)/, host: /www\.wenshushu\.cn/, inputSelector: '.pwd-inp .ivu-input', submitSelector: '.pwd-inp .ivu-btn', storage: 'hash' },
-        uc: { name: "UC网盘", domain: "https://drive.uc.cn", pathPrefix: "/s/", reg: /((?:https?:\/\/)?drive\.uc\.cn\/s\/[a-zA-Z\d]+)/, host: /drive\.uc\.cn/, inputSelector: "input[class*='ShareReceivePC--input'], .input-wrap input", submitSelector: "button[class*='ShareReceivePC--submit-btn'], .input-wrap button", storage: 'hash' },
-        jianguoyun: { name: "坚果云", domain: "https://www.jianguoyun.com", pathPrefix: "/p/", reg: /((?:https?:\/\/)?www\.jianguoyun\.com\/p\/[\w-]+)/, host: /www\.jianguoyun\.com/, inputSelector: 'input[type=password]', submitSelector: '.ok-button, .confirm-button', storage: 'hash' },
-        wopan: { name: "联通云盘", domain: "https://pan.wo.cn", pathPrefix: "/s/", reg: /((?:https?:\/\/)?pan\.wo\.cn\/s\/[\w_]+)/, host: /(pan\.wo\.cn|panservice\.mail\.wo\.cn)/, inputSelector: 'input.el-input__inner, .van-field__control', submitSelector: '.s-button, .share-code button', storage: 'hash', storagePwdName: 'tmp_wo_pwd' },
-        mega: { name: "MEGA", domain: "https://mega.nz", pathPrefix: "/#", reg: /((?:https?:\/\/)?(?:mega\.nz|mega\.co\.nz)\/(?:#F?|file\/|folder\/)![\w!-]+)/, host: /(?:mega\.nz|mega\.co\.nz)/, inputSelector: '.dlkey-dialog input', submitSelector: '.dlkey-dialog .fm-dialog-new-folder-button', storage: 'local' }, // MEGA link structure is different
-        flowus: { name: "FlowUs息流", domain: "https://flowus.cn", pathPrefix: "/", reg: /((?:https?:\/\/)?flowus\.cn\/[\S ^\/]*\/?share\/[a-z\d]{8}-[a-z\d]{4}-[a-z\d]{4}-[a-z\d]{4}-[a-z\d]{12})/, host: /flowus\.cn/, storage: 'hash' },
-        // Add more providers here based on reference script...
+        // Added inputSelector and potentially submitSelector for autofill
+        baidu: { name: "百度网盘", domain: "https://pan.baidu.com", pathPrefix: "/s/", pwdParam: "pwd", pwdLength: 4, inputSelector: '#pwd', submitSelector: '#submitBtn' }, // Example selectors, need verification
+        pan123: { name: "123云盘", domain: "https://www.123pan.com", pathPrefix: "/s/", codeSeparator: "-", codeKeyword: "提取码", inputSelector: 'input[placeholder*="提取码"], input[placeholder*="访问码"]', submitSelector: 'button[type="submit"], button:contains("确定")' }, // Example selectors
+        aliyun: { name: "阿里云盘", domain: "https://www.aliyundrive.com", pathPrefix: "/s/", codeKeyword: "提取码", inputSelector: 'input[placeholder*="提取码"]', submitSelector: 'button:contains("提取文件")' }, // Example selectors
+        quark: { name: "夸克网盘", domain: "https://pan.quark.cn", pathPrefix: "/s/", codeKeyword: "提取码", inputSelector: 'input[placeholder*="提取码"]', submitSelector: 'button:contains("确认")' } // Example selectors
     };
     const STORAGE_KEY_CODE = 'cdlh_shareCode';
     const STORAGE_KEY_PROVIDER = 'cdlh_shareProvider';
 
-    const linkSelectorClass = 'cdlh-cloud-link'; // Specific class for cloud links
-    const generalLinkClass = 'cdlh-general-link'; // Class for general links
+    const linkSelectorClass = 'cdlh-link-helper';
+    const fullUrlSelectorClass = 'cdlh-full-url';
 
-    // Regex v4: Prioritize matching specific cloud drive patterns first.
-    // Group 1: Cloud drive full URL or partial (/s/...)
-    // Group 2: Optional code part following the link (提取码: xxx or ?pwd=xxx)
-    // Use non-capturing groups (?:...) where possible.
-    // Make the code part optional and capture it separately.
-    // Stop matching at common delimiters or end of line/string.
-    const cloudLinkRegex = /((?:https?:\/\/[\w.\-]+\/|\/)?s\/[a-zA-Z0-9_\-]+(?:[?&][\w=&%+-]*)?)(?:\s*(?:提取码|密码|口令|code|pwd)\s*[:：]?\s*([a-zA-Z0-9]{3,8}))?/g;
+    // Regex v3: Use two main patterns separated by |
+    // 1. Full URL: https?://domain/s/alphanum[non-special-chars]*
+    // 2. Partial URL: /s/alphanum[non-special-chars]*
+    // Allows spaces within the [^...] part now, cleaning handles it.
+    const potentialLinkRegex = /(https?:\/\/[\w.\-]+\/s\/[a-zA-Z0-9][^\n\"\'\<\(\)]*)|(\/s\/[a-zA-Z0-9][^\n\"\'\<\(\)]*)/g;
+    // Regex for standalone codes (less priority now, focus is on codes attached to links)
+    // const standaloneCodeRegex = /(?:\W|^)([a-zA-Z0-9_\-]{8,})\s+(?:提取码|密码|口令|code|pwd)\s*[:：]?\s*([a-zA-Z0-9]{4,})(?:\W|$)/g;
 
-    // Regex for general HTTP/HTTPS links (excluding those starting with /s/)
-    const generalLinkRegex = /(?<!\/)https?:\/\/[\w.-]+\.\w+(?::\d{1,5})?(?:\/[\w?&.=%-@+#]*)*[\w/-]/g; // Added negative lookbehind to avoid /s/
-
-    // Regex to extract password/code from text near a link
-    const codeExtractRegex = /(?:提取码|密码|口令|code|pwd)\s*[:：]?\s*([a-zA-Z0-9]{3,8})/i;
 
     // --- Styling ---
     GM_addStyle(`
-        .${linkSelectorClass}, .${generalLinkClass} { /* Apply base style to both */
+        .${linkSelectorClass}, .${fullUrlSelectorClass} {
             color: #007bff !important; cursor: pointer; text-decoration: underline !important;
             font-weight: bold; background: none !important; border: none !important;
             margin: 0 !important; padding: 0 !important;
         }
-        .${linkSelectorClass}:hover, .${generalLinkClass}:hover { color: #0056b3 !important; }
-        /* Specific styles if needed */
-        .${linkSelectorClass} { /* Maybe slightly different style for cloud links? */ }
-        .${generalLinkClass} { /* Style for general links */ }
-
-        /* Modal Styles (unchanged) */
-        #cdlh-modal-overlay { /* ... */ }
-        #cdlh-modal-overlay.cdlh-visible { /* ... */ }
-        #cdlh-modal-content { /* ... */ }
-        #cdlh-modal-overlay.cdlh-visible #cdlh-modal-content { /* ... */ }
-        #cdlh-modal-content h3 { /* ... */ }
-        #cdlh-modal-content p { /* ... */ }
-        #cdlh-modal-content code { /* ... */ }
-        #cdlh-modal-content button { /* ... */ }
-        #cdlh-modal-content button:hover { /* ... */ }
-        #cdlh-modal-content button.cdlh-cancel { /* ... */ }
-        #cdlh-modal-content button.cdlh-cancel:hover { /* ... */ }
+        .${linkSelectorClass}:hover, .${fullUrlSelectorClass}:hover { color: #0056b3 !important; }
+        #cdlh-modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0, 0, 0, 0.6); z-index: 99998; display: flex;
+            justify-content: center; align-items: center; backdrop-filter: blur(3px);
+            opacity: 0; visibility: hidden; transition: opacity 0.3s ease-in-out, visibility 0s linear 0.3s;
+        }
+        #cdlh-modal-overlay.cdlh-visible { opacity: 1; visibility: visible; transition: opacity 0.3s ease-in-out, visibility 0s linear 0s; }
+        #cdlh-modal-content {
+            background-color: white; padding: 25px 35px; border-radius: 8px;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.25); min-width: 320px; max-width: 90%;
+            text-align: center; font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+            border: 1px solid #ccc; transform: scale(0.9); opacity: 0;
+            transition: transform 0.3s ease-in-out, opacity 0.3s ease-in-out;
+        }
+        #cdlh-modal-overlay.cdlh-visible #cdlh-modal-content { transform: scale(1); opacity: 1; }
+        #cdlh-modal-content h3 { margin-top: 0; margin-bottom: 15px; color: #333; font-size: 1.3em; }
+        #cdlh-modal-content p { margin-bottom: 20px; color: #555; font-size: 0.95em; word-break: break-all; }
+        #cdlh-modal-content code { font-size: 0.9em; background-color: #eee; padding: 2px 4px; border-radius: 3px; }
+        #cdlh-modal-content button {
+            display: block; width: 100%; padding: 12px 20px; margin: 10px 0; border: none;
+            border-radius: 5px; background-color: #007bff; color: white; font-size: 16px;
+            cursor: pointer; transition: background-color 0.2s ease, transform 0.1s ease;
+        }
+        #cdlh-modal-content button:hover { background-color: #0056b3; transform: translateY(-1px); }
+        #cdlh-modal-content button.cdlh-cancel { background-color: #6c757d; }
+        #cdlh-modal-content button.cdlh-cancel:hover { background-color: #5a6268; }
     `);
-
 
     // --- Functions ---
 
     /**
-     * Cleans PARTIAL cloud link text (/s/...) removing junk.
+     * Cleans PARTIAL link text (/s/...) removing junk. Handles spaces captured by regex.
      * @param {string} text - Original partial link text (must start with /s/).
      * @returns {string|null} Cleaned text, or null if invalid.
      */
-    function cleanPartialLink(text) {
+    function cleanLink(text) {
         if (!text || !text.startsWith('/s/')) return null;
-        // Basic cleaning, remove common junk, emojis, invisible chars
-        let cleaned = text.replace(/[\[【][^\]】]*[\]】]/g, '')
-                          .replace(/[删插]/g, '')
-                          .replace(/[\u{1F300}-\u{1F5FF}\u{1F600}-\u{1F64F}\u{1F680}-\u{1F6FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE00}-\u{FE0F}\u{1F900}-\u{1F9FF}\u{1FA70}-\u{1FAFF}]/ug, '')
-                          .replace(/[\u200B-\u200D\uFEFF]/g, '')
-                          .replace(/\s+/g, ''); // Remove all spaces for simplicity now
 
-        // Trim trailing punctuation AFTER potential query params
+        // 1. Remove bracketed content: [开心], 【abc】
+        let cleaned = text.replace(/[\[【][^\]】]*[\]】]/g, '');
+        // 2. Remove common interfering words/chars: 删, 插, etc.
+        cleaned = cleaned.replace(/[删插]/g, '');
+        // 3. Remove standard emojis
+        cleaned = cleaned.replace(/[\u{1F300}-\u{1F5FF}\u{1F600}-\u{1F64F}\u{1F680}-\u{1F6FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE00}-\u{FE0F}\u{1F900}-\u{1F9FF}\u{1FA70}-\u{1FAFF}]/ug, '');
+        // 4. Remove potential invisible characters
+        cleaned = cleaned.replace(/[\u200B-\u200D\uFEFF]/g, '');
+
+        // 5. Handle spaces carefully: Remove leading/trailing spaces, collapse internal multiple spaces to one.
+        // Then remove spaces ONLY if they are not part of a potential code keyword phrase.
+        // This is complex. Let's try removing all spaces for now as paths/codes usually don't contain them.
+        cleaned = cleaned.replace(/\s+/g, '');
+
+        // 6. Trim trailing punctuation
         cleaned = cleaned.replace(/[.,!?;:]+$/, '');
 
-        // Validation
-        if (!/^\/s\/[a-zA-Z0-9]/.test(cleaned)) {
-             console.warn(`[网盘助手] Cleaning partial link resulted in invalid: ${text} -> ${cleaned}`);
+        // 7. Basic validation
+        if (!cleaned.startsWith('/s/') || cleaned.length <= 3 || !/^\/s\/[a-zA-Z0-9]/.test(cleaned)) {
+             console.warn(`[网盘助手] Cleaning resulted in invalid link: ${text} -> ${cleaned}`);
              return null;
         }
         return cleaned;
     }
 
     /**
-     * Parses a cleaned cloud link path (/s/...) to extract path and code.
-     * No longer assumes provider based on format (except Baidu ?pwd=).
-     * @param {string} cleanedLinkPath - Cleaned link path (starts with /s/).
-     * @returns {{path: string|null, code: string|null, isBaiduPwdFormat: boolean}}
+     * Parses the cleaned link (/s/...) to extract path, code, and Baidu hint.
+     * @param {string} cleanedLink - Cleaned link text (starts with /s/).
+     * @returns {{path: string|null, code: string|null, providerHint: string|null}}
      */
-    function parseCloudLinkPath(cleanedLinkPath) {
+    function parseLink(cleanedLink) {
         let path = null;
         let code = null;
-        let isBaiduPwdFormat = false;
+        let providerHint = null; // Only set for Baidu ?pwd= format
 
-        if (!cleanedLinkPath || !cleanedLinkPath.startsWith('/s/')) {
-            return { path, code, isBaiduPwdFormat };
+        if (!cleanedLink || !cleanedLink.startsWith('/s/')) {
+            return { path, code, providerHint };
         }
 
-        // Check Baidu ?pwd= format first
-        let match = cleanedLinkPath.match(/^(\/s\/[a-zA-Z0-9_-]+)\?pwd=([a-zA-Z0-9]{4})$/);
+        // Try Baidu format: /s/<code>?pwd=<pass>
+        let match = cleanedLink.match(/^(\/s\/[a-zA-Z0-9_-]+)\?pwd=([a-zA-Z0-9]{4})$/);
+        if (match) {
+            providerHint = 'baidu'; // Set hint ONLY for this specific Baidu format
+            path = match[1];
+            code = match[2];
+            console.log(`[网盘助手] 解析为百度 ?pwd= 格式: Path=${path}, Code=${code}`);
+            return { path, code, providerHint };
+        }
+
+        // Try 123Pan format: /s/<id>-<pass> (No hint)
+        match = cleanedLink.match(/^(\/s\/[a-zA-Z0-9]+)-([a-zA-Z0-9]+)$/);
         if (match) {
             path = match[1];
             code = match[2];
-            isBaiduPwdFormat = true;
-            console.log(`[网盘助手] 解析为百度 ?pwd= 格式: Path=${path}, Code=${code}`);
-            return { path, code, isBaiduPwdFormat };
+            console.log(`[网盘助手] 解析为 '-' 格式 (无提示): Path=${path}, Code=${code}`);
+            return { path, code, providerHint }; // providerHint is null
         }
 
-        // No other format implies code directly from path (removed '-' logic)
-        // Just return the path itself
-        path = cleanedLinkPath;
-         // Basic validation on the path itself
+        // Try extraction code keyword format: /s/<id>提取码:<pass> (No hint)
+        // Needs to handle cases where code might be attached with ? or & after cleaning spaces
+        match = cleanedLink.match(/^(\/s\/[a-zA-Z0-9_\-]+)(?:[\?\&]?)(?:提取码|密码|口令|code|pwd)\s*[:：]?\s*([a-zA-Z0-9]{4,})/i);
+         if (match) {
+            path = match[1];
+            code = match[2];
+            console.log(`[网盘助手] 解析为关键字提取码格式 (无提示): Path=${path}, Code=${code}`);
+            return { path, code, providerHint }; // providerHint is null
+        }
+
+        // Fallback: Treat as path, remove potential trailing code patterns just in case
+        path = cleanedLink.replace(/[\?\&]?(?:提取码|密码|口令|code|pwd)\s*[:：]?\s*[a-zA-Z0-9]{4,}.*$/i, '');
+        path = path.replace(/-[a-zA-Z0-9]+$/, ''); // Also remove potential trailing -code
+
         if (path && path.startsWith('/s/') && path.length > 3) {
              console.log(`[网盘助手] 解析为通用路径: Path=${path}`);
-             return { path, code, isBaiduPwdFormat }; // code is null
+             return { path, code, providerHint }; // code and hint are null
         } else {
-             console.log(`[网盘助手] 解析路径无效: ${cleanedLinkPath}`);
-             return { path: null, code: null, isBaiduPwdFormat: false };
+             console.log(`[网盘助手] 解析失败或路径无效: ${cleanedLink}`);
+             return { path: null, code: null, providerHint: null };
         }
     }
 
-
     /** Shows the provider selection dialog */
-    function showProviderPrompt(linkPath, potentialCode, originalText) {
-        // ... (Modal display logic - unchanged) ...
+    function showProviderPrompt(cleanedPath, potentialCode, originalText) {
+        // ... (Modal display logic - unchanged from v1.2, including animation)
         const existingOverlay = document.getElementById('cdlh-modal-overlay');
         if (existingOverlay) existingOverlay.remove();
 
@@ -199,22 +185,19 @@
         overlay.id = 'cdlh-modal-overlay';
         const content = document.createElement('div');
         content.id = 'cdlh-modal-content';
-        // Display original text and the *parsed* path and code
-        content.innerHTML = `<h3>选择网盘提供商 (Select Provider)</h3><p>检测到内容 (Detected):<br><code style="font-size: 0.9em;">${originalText}</code><br>解析路径 (Path): ${linkPath}${potentialCode ? '<br>提取码 (Code): ' + potentialCode : ''}</p>`;
+        content.innerHTML = `<h3>选择网盘提供商 (Select Provider)</h3><p>检测到链接 (Detected Link):<br><code style="font-size: 0.9em;">${originalText}</code><br>解析路径 (Parsed Path): ${cleanedPath}${potentialCode ? '<br>提取码 (Code): ' + potentialCode : ''}</p>`;
 
         for (const key in providers) {
-            // Only show providers that actually have a /s/ path structure generally
-            if (providers[key].pathPrefix === '/s/' || key === 'baidu' || key === 'pan123' || key === 'aliyun' || key === 'quark') { // Add more relevant keys if needed
-                const provider = providers[key];
-                const btn = document.createElement('button');
-                btn.textContent = provider.name;
-                btn.onclick = (e) => {
-                    e.stopPropagation();
-                    handleSelection(key, linkPath, potentialCode); // Pass parsed path and code
-                    hideModal(overlay);
-                };
-                content.appendChild(btn);
-            }
+            const provider = providers[key];
+            const btn = document.createElement('button');
+            btn.textContent = provider.name;
+            btn.onclick = (e) => {
+                e.stopPropagation();
+                // Pass code to handleSelection for storage/URL modification
+                handleSelection(key, cleanedPath, potentialCode);
+                hideModal(overlay);
+            };
+            content.appendChild(btn);
         }
         const cancelBtn = document.createElement('button');
         cancelBtn.textContent = '取消 (Cancel)';
@@ -227,20 +210,21 @@
         overlay.addEventListener('click', (event) => { if (event.target === overlay) hideModal(overlay); });
     }
 
-    /** Hides the modal with animation */
-    function hideModal(overlay) {
-        // ... (Unchanged) ...
-         if (!overlay) return;
-         overlay.classList.remove('cdlh-visible');
-         overlay.addEventListener('transitionend', () => {
-              if (overlay.parentNode) overlay.remove();
-         }, { once: true });
-    }
+     /** Hides the modal with animation */
+     function hideModal(overlay) {
+        // ... (Unchanged from v1.2)
+        if (!overlay) return;
+        overlay.classList.remove('cdlh-visible');
+        overlay.addEventListener('transitionend', () => {
+             if (overlay.parentNode) overlay.remove();
+        }, { once: true });
+     }
+
 
     /**
      * Handles selection, prepares for redirect (stores code), and navigates.
      * @param {string} providerKey - Key ('baidu', 'pan123', etc.)
-     * @param {string} path - Parsed path starting with /s/
+     * @param {string} path - Cleaned path starting with /s/
      * @param {string|null} code - Extracted code
      */
     async function handleSelection(providerKey, path, code) {
@@ -248,216 +232,170 @@
         if (!provider || !path) return;
 
         let finalUrl = provider.domain + path;
-        let storeCodeForAutofill = true;
+        let storeCodeForAutofill = true; // Flag to control storing code
 
-        // Baidu Specific Logic: Append ?pwd= if code exists and matches length
+        // Baidu Specific Logic: Try to append ?pwd= if possible
         if (providerKey === 'baidu' && code && code.length === provider.pwdLength) {
             finalUrl += (finalUrl.includes('?') ? '&' : '?') + `${provider.pwdParam}=${code}`;
-            storeCodeForAutofill = false;
+            storeCodeForAutofill = false; // Already in URL, no need to store for autofill
             console.log(`[网盘助手] Baidu: Appending ?pwd= to URL.`);
         }
 
         console.log(`[网盘助手] Selected: ${provider.name}, Path: ${path}, Code: ${code || 'None'}, Final URL: ${finalUrl}`);
 
-        // Store code for autofill if needed
+        // Store code for autofill on the destination page if needed and code exists
         if (storeCodeForAutofill && code) {
             try {
                 await GM_setValue(STORAGE_KEY_CODE, code);
                 await GM_setValue(STORAGE_KEY_PROVIDER, providerKey);
                 console.log(`[网盘助手] Stored code "${code}" and provider "${providerKey}" for autofill.`);
-                GM_setClipboard(code, 'text'); // Also copy as fallback
-                 GM_notification({ text: `提取码 "${code}" 已复制 (将尝试自动填充)`, title: '网盘助手', timeout: 4000 });
+                // Notify about copy as fallback/confirmation
+                GM_setClipboard(code, 'text');
+                 GM_notification({
+                    text: `提取码 "${code}" 已复制 (将尝试自动填充)`,
+                    title: '网盘助手',
+                    timeout: 4000
+                 });
             } catch (err) {
                  console.error('[网盘助手] Failed to store code for autofill:', err);
+                 // Still copy code as fallback
                  GM_setClipboard(code, 'text');
-                 GM_notification({ text: `提取码 "${code}" 已复制 (存储失败)`, title: '网盘助手', timeout: 4000 });
+                 GM_notification({
+                    text: `提取码 "${code}" 已复制 (存储失败)`,
+                    title: '网盘助手',
+                    timeout: 4000
+                 });
             }
         } else if (code) {
+             // Code exists but wasn't stored (e.g., Baidu ?pwd=) - still copy
              GM_setClipboard(code, 'text');
-             GM_notification({ text: `提取码 "${code}" 已复制`, title: '网盘助手', timeout: 4000 });
+             GM_notification({
+                 text: `提取码 "${code}" 已复制`,
+                 title: '网盘助手',
+                 timeout: 4000
+             });
         }
 
-        // Redirect using GM_openInTab for better control? Or keep window.open?
-        // GM_openInTab(finalUrl, { active: true, setParent: true }); // Example
+        // Redirect
         window.open(finalUrl, '_blank', 'noopener,noreferrer');
     }
 
     /**
-     * Processes a text node, finding cloud links, general links, and handling them.
+     * Processes a text node potentially containing links.
      * @param {Node} node - The text node.
      */
     function processNode(node) {
         let content = node.nodeValue;
-        const fragment = document.createDocumentFragment();
+        let match;
         let lastIndex = 0;
+        const fragment = document.createDocumentFragment();
         let foundMatch = false;
 
-        // --- Step 1: Process Cloud Links ---
-        cloudLinkRegex.lastIndex = 0; // Reset regex state
-        let cloudMatches = [];
-        let match;
-        while ((match = cloudLinkRegex.exec(content)) !== null) {
-            cloudMatches.push({
-                index: match.index,
-                linkPart: match[1], // The /s/... part or full URL with /s/
-                codePart: match[2], // The code extracted by the regex (optional)
-                fullMatch: match[0] // The entire string matched by this iteration
-            });
-        }
+        potentialLinkRegex.lastIndex = 0;
 
-        // --- Step 2: Process General Links ---
-        generalLinkRegex.lastIndex = 0; // Reset regex state
-        let generalMatches = [];
-        while ((match = generalLinkRegex.exec(content)) !== null) {
-             // Avoid matching if it overlaps significantly with a cloud link match
-             const isOverlapping = cloudMatches.some(cm =>
-                 match.index < (cm.index + cm.fullMatch.length) && (match.index + match[0].length) > cm.index
-             );
-             if (!isOverlapping) {
-                 generalMatches.push({
-                     index: match.index,
-                     link: match[0]
-                 });
-             }
-        }
+        while ((match = potentialLinkRegex.exec(content)) !== null) {
+            const fullUrlMatch = match[1]; // Group 1: Full URL (includes http)
+            const partialUrlMatch = match[2]; // Group 2: Partial URL (starts with /s/)
+            const originalMatch = fullUrlMatch || partialUrlMatch; // The actual matched string
 
-        // --- Step 3: Combine and Sort Matches ---
-        let allMatches = [...cloudMatches, ...generalMatches];
-        allMatches.sort((a, b) => a.index - b.index); // Sort by starting position
+            if (!originalMatch) continue; // Should not happen with this regex structure
 
-        // --- Step 4: Build the Fragment ---
-        allMatches.forEach(m => {
-            // Add text before the current match
-            if (m.index > lastIndex) {
-                fragment.appendChild(document.createTextNode(content.substring(lastIndex, m.index)));
-            }
+            console.log(`[网盘助手] Regex Match: Full='${fullUrlMatch}', Partial='${partialUrlMatch}'`);
+
+            // Add text before the match
+            fragment.appendChild(document.createTextNode(content.substring(lastIndex, match.index)));
             foundMatch = true;
 
-            if (m.linkPart !== undefined) { // It's a cloud link match
-                const originalCloudMatchText = m.fullMatch; // Use the full matched text for context
-                const linkPartRaw = m.linkPart;
-                let codePartRaw = m.codePart; // Code found by regex directly after link
+            // Trim trailing punctuation for display/linking purposes
+            const displayMatch = originalMatch.replace(/[.,!?;:]+$/, '');
 
-                console.log(`[网盘助手] Cloud Match: Link='${linkPartRaw}', Code='${codePartRaw}', Full='${originalCloudMatchText}'`);
+            if (fullUrlMatch) {
+                // Handle full URL match
+                console.log(`[网盘助手] Found full URL: ${displayMatch}`);
+                const a = document.createElement('a');
+                a.href = displayMatch; // Use trimmed URL for href
+                a.textContent = displayMatch; // Show trimmed URL
+                a.className = fullUrlSelectorClass;
+                a.title = `点击直接打开链接 (Click to open link directly)`;
+                a.target = '_blank';
+                a.rel = 'noopener noreferrer';
+                // Add click handler to potentially parse code from full URL for storage?
+                 a.onclick = async (e) => {
+                     e.preventDefault(); // Prevent default navigation initially
+                     const url = e.target.href;
+                     console.log("[网盘助手] Full URL clicked:", url);
+                     // Try parsing code from full URL (e.g., Baidu ?pwd=)
+                     const baiduMatch = url.match(/\/s\/[a-zA-Z0-9_-]+\?pwd=([a-zA-Z0-9]{4})$/);
+                     const code = baiduMatch ? baiduMatch[1] : null;
+                     if (code) {
+                         console.log("[网盘助手] Found code in full Baidu URL, copying:", code);
+                         GM_setClipboard(code, 'text');
+                         GM_notification({ text: `提取码 "${code}" 已复制`, title: '网盘助手', timeout: 3000 });
+                     }
+                     // No storage needed for Baidu ?pwd=
+                     window.open(url, '_blank', 'noopener,noreferrer'); // Open link after potential copy
+                 };
+                fragment.appendChild(a);
 
-                // Determine if link is full URL or partial
-                const isFullUrl = linkPartRaw.startsWith('http');
-                let displayLink = linkPartRaw.replace(/[.,!?;:]+$/, ''); // Trim trailing punct for display/href
-                let finalCode = codePartRaw; // Use code found by regex if present
+            } else if (partialUrlMatch) {
+                // Handle partial URL match
+                console.log(`[网盘助手] Found partial link: ${originalMatch}`);
+                const cleaned = cleanLink(originalMatch); // Clean the partial link
+                console.log(`[网盘助手] Cleaned partial link: "${cleaned}"`);
 
-                if (isFullUrl) {
-                    // Full Cloud URL (e.g., https://pan.baidu.com/s/...)
-                     const a = document.createElement('a');
-                     a.href = displayLink;
-                     a.textContent = displayLink; // Show the cleaned link
-                     a.className = linkSelectorClass; // Use cloud link class
-                     a.title = `点击打开网盘链接 (Click to open cloud link)`;
-                     a.target = '_blank';
-                     a.rel = 'noopener noreferrer';
-                     a.onclick = async (e) => {
-                         e.preventDefault();
-                         const url = e.target.href;
-                         console.log("[网盘助手] Full Cloud URL clicked:", url);
-                         // Try to parse code from URL itself (Baidu ?pwd=)
-                         const baiduMatch = url.match(/\?pwd=([a-zA-Z0-9]{4})$/);
-                         const urlCode = baiduMatch ? baiduMatch[1] : null;
-                         const codeToUse = finalCode || urlCode; // Prioritize code found near link, fallback to URL code
+                if (cleaned) {
+                    const { path: parsedPath, code: parsedCode, providerHint } = parseLink(cleaned);
+                    console.log(`[网盘助手] Parsed partial link - Path: ${parsedPath}, Code: ${parsedCode}, Hint: ${providerHint}`);
 
-                         if (codeToUse) {
-                             GM_setClipboard(codeToUse, 'text');
-                             GM_notification({ text: `提取码 "${codeToUse}" 已复制`, title: '网盘助手', timeout: 3000 });
-                         }
-                         // Determine provider based on domain for potential autofill storage if code wasn't in URL
-                         let providerKey = null;
-                         for (const key in providers) {
-                             if (providers[key].host.test(new URL(url).hostname)) {
-                                 providerKey = key;
-                                 break;
-                             }
-                         }
-                         if (providerKey && codeToUse && !urlCode) { // Store only if code wasn't part of URL
-                             try {
-                                 await GM_setValue(STORAGE_KEY_CODE, codeToUse);
-                                 await GM_setValue(STORAGE_KEY_PROVIDER, providerKey);
-                                 console.log(`[网盘助手] Stored code "${codeToUse}" for ${providerKey} from full URL context.`);
-                             } catch(err) { console.error("Storage failed", err); }
-                         }
-                         window.open(url, '_blank', 'noopener,noreferrer');
-                     };
-                     fragment.appendChild(a);
+                    if (parsedPath) {
+                        const span = document.createElement('span');
+                        span.className = linkSelectorClass;
+                        span.textContent = displayMatch; // Show trimmed original text
+                        span.title = `点击处理链接 (Click to process link): ${cleaned || '无效'}`;
+                        span.dataset.cleanedPath = parsedPath;
+                        if (parsedCode) span.dataset.potentialCode = parsedCode;
+                        span.dataset.originalText = originalMatch; // Store raw original for prompt
 
-                } else {
-                    // Partial Cloud Link (/s/...)
-                    const cleanedPath = cleanPartialLink(linkPartRaw); // Clean the /s/... part
-                    if (cleanedPath) {
-                        const { path: parsedPath, code: pathCode, isBaiduPwdFormat } = parseCloudLinkPath(cleanedPath);
-                        const codeToUse = finalCode || pathCode; // Prioritize code found near link, fallback to code parsed from path (e.g. ?pwd=)
+                        span.onclick = (e) => {
+                            e.preventDefault(); e.stopPropagation();
+                            const path = e.target.dataset.cleanedPath;
+                            const code = e.target.dataset.potentialCode;
+                            const original = e.target.dataset.originalText;
+                            const hint = parseLink(cleaned)?.providerHint; // Re-parse to get hint reliably
 
-                        if (parsedPath) {
-                            const span = document.createElement('span');
-                            span.className = linkSelectorClass;
-                            span.textContent = displayLink; // Show the cleaned original partial link
-                            span.title = `点击处理网盘链接 (Click to process cloud link): ${parsedPath}`;
-                            span.dataset.parsedPath = parsedPath; // Store parsed path
-                            if (codeToUse) span.dataset.potentialCode = codeToUse; // Store final code
-                            span.dataset.originalText = originalCloudMatchText; // Store raw original for prompt
+                            console.log(`[网盘助手] Click event (Partial) - Path: ${path}, Code: ${code}, Hint: ${hint}`);
 
-                            span.onclick = (e) => {
-                                e.preventDefault(); e.stopPropagation();
-                                const path = e.target.dataset.parsedPath;
-                                const code = e.target.dataset.potentialCode;
-                                const original = e.target.dataset.originalText;
-                                const isBaiduDirect = parseCloudLinkPath(cleanedPath)?.isBaiduPwdFormat;
-
-                                console.log(`[网盘助手] Click event (Partial) - Path: ${path}, Code: ${code}, isBaiduDirect: ${isBaiduDirect}`);
-
-                                if (isBaiduDirect) {
-                                    handleSelection('baidu', path, code); // Directly handle Baidu ?pwd= format
-                                } else {
-                                    showProviderPrompt(path, code, original); // Prompt for others
-                                }
-                            };
-                            fragment.appendChild(span);
-                        } else {
-                             fragment.appendChild(document.createTextNode(originalCloudMatchText)); // Append original if parsing failed
-                        }
+                            if (hint === 'baidu') {
+                                handleSelection('baidu', path, code);
+                            } else {
+                                showProviderPrompt(path, code, original); // Prompt for others
+                            }
+                        };
+                        fragment.appendChild(span);
                     } else {
-                         fragment.appendChild(document.createTextNode(originalCloudMatchText)); // Append original if cleaning failed
+                        fragment.appendChild(document.createTextNode(originalMatch)); // Append original if parsing failed
                     }
+                } else {
+                    fragment.appendChild(document.createTextNode(originalMatch)); // Append original if cleaning failed
                 }
-                 lastIndex = m.index + originalCloudMatchText.length; // Advance index past the full cloud match
-
-            } else if (m.link !== undefined) { // It's a general link match
-                 const generalLink = m.link;
-                 console.log(`[网盘助手] Found General Link: ${generalLink}`);
-                 const a = document.createElement('a');
-                 a.href = generalLink;
-                 a.textContent = generalLink;
-                 a.className = generalLinkClass; // Use general link class
-                 a.title = `点击打开链接 (Click to open link)`;
-                 a.target = '_blank';
-                 a.rel = 'noopener noreferrer';
-                 fragment.appendChild(a);
-                 lastIndex = m.index + generalLink.length; // Advance index past the general link
             }
 
-        });
+            lastIndex = match.index + originalMatch.length; // Move lastIndex past the current match
+        }
 
-        // Add any remaining text after the last match
         if (lastIndex < content.length) {
             fragment.appendChild(document.createTextNode(content.substring(lastIndex)));
         }
 
-        // Replace the original node only if matches were found
         if (foundMatch) {
             node.parentNode.replaceChild(fragment, node);
         }
     }
 
-
-    /** Attempts to auto-fill the password on cloud drive share pages. */
+    /**
+     * Attempts to auto-fill the password on cloud drive share pages.
+     */
     async function tryAutofillPassword() {
-        // ... (Autofill logic - largely unchanged from v1.3, but ensure selectors in providers are updated) ...
         const currentUrl = window.location.href;
         console.log('[网盘助手] Checking for autofill on:', currentUrl);
 
@@ -468,142 +406,95 @@
             console.log('[网盘助手] No code/provider found in storage for autofill.');
             return;
         }
+
         console.log(`[网盘助手] Found stored code "${code}" for provider "${providerKey}". Attempting autofill.`);
 
         const provider = providers[providerKey];
-        // Check if the current URL actually matches the provider's host regex
-        if (!provider || !provider.host.test(window.location.hostname)) {
-             console.warn(`[网盘助手] Stored provider "${providerKey}" does not match current host "${window.location.hostname}". Clearing storage.`);
-             await GM_setValue(STORAGE_KEY_CODE, null);
-             await GM_setValue(STORAGE_KEY_PROVIDER, null);
-             return;
-        }
-        if (!provider.inputSelector) {
-            console.warn(`[网盘助手] Provider "${providerKey}" config missing input selector. Clearing storage.`);
+        if (!provider || !provider.inputSelector) {
+            console.warn('[网盘助手] Provider config missing or no input selector for autofill.');
+            // Clear storage even if config is missing to prevent reuse
             await GM_setValue(STORAGE_KEY_CODE, null);
             await GM_setValue(STORAGE_KEY_PROVIDER, null);
             return;
         }
 
-        // Wait for elements
-        await new Promise(resolve => setTimeout(resolve, 600)); // Increased delay slightly
+        // Wait a short moment for the page elements to likely be ready
+        await new Promise(resolve => setTimeout(resolve, 500)); // 500ms delay
 
         try {
             const inputElement = document.querySelector(provider.inputSelector);
-            if (inputElement && !inputElement.disabled && inputElement.offsetParent !== null) { // Check visibility
+            if (inputElement) {
                 console.log('[网盘助手] Found input element:', inputElement);
                 inputElement.value = code;
+                // Trigger input event in case the page uses listeners
                 inputElement.dispatchEvent(new Event('input', { bubbles: true }));
                 inputElement.dispatchEvent(new Event('change', { bubbles: true }));
                 console.log('[网盘助手] Autofilled code.');
 
-                // Try submit
+                // Optionally try to click submit button
                 if (provider.submitSelector) {
-                     await new Promise(resolve => setTimeout(resolve, 300)); // Delay before submit
+                     await new Promise(resolve => setTimeout(resolve, 200)); // Short delay before submit
                      const submitButton = document.querySelector(provider.submitSelector);
-                     if (submitButton && !submitButton.disabled && submitButton.offsetParent !== null) {
+                     if (submitButton && !submitButton.disabled) {
                          console.log('[网盘助手] Found submit button, attempting click:', submitButton);
                          submitButton.click();
                      } else {
-                         console.log('[网盘助手] Submit button not found, disabled, or hidden.');
+                         console.log('[网盘助手] Submit button not found or disabled.');
                      }
                 }
-                // Clear storage after successful attempt
+
+                // Clear storage after successful fill (and potential submit attempt)
                 await GM_setValue(STORAGE_KEY_CODE, null);
                 await GM_setValue(STORAGE_KEY_PROVIDER, null);
                 console.log('[网盘助手] Cleared stored code/provider.');
+
             } else {
-                console.warn('[网盘助手] Password input element not found, disabled, or hidden using selector:', provider.inputSelector);
-                 await GM_setValue(STORAGE_KEY_CODE, null); // Clear storage if input not found
+                console.warn('[网盘助手] Password input element not found using selector:', provider.inputSelector);
+                 // Clear storage even if input not found
+                 await GM_setValue(STORAGE_KEY_CODE, null);
                  await GM_setValue(STORAGE_KEY_PROVIDER, null);
             }
         } catch (error) {
             console.error('[网盘助手] Error during autofill attempt:', error);
-             await GM_setValue(STORAGE_KEY_CODE, null); // Clear storage on error
+             // Clear storage on error
+             await GM_setValue(STORAGE_KEY_CODE, null);
              await GM_setValue(STORAGE_KEY_PROVIDER, null);
         }
     }
 
-    // --- Observer and Initial Run ---
-    const formatLimit = 10; // Limit processing per node
-    const formatMap = new WeakMap();
-    const ignoreTags = ['SCRIPT', 'STYLE', 'A', 'TEXTAREA', 'NOSCRIPT', 'CODE', 'TITLE', 'PRE', `.${linkSelectorClass}`, `.${generalLinkClass}`]; // Added PRE and generated classes
 
-    function processTarget(target) {
-         if (!target || !target.childNodes || ignoreTags.some(tag => target.matches(tag))) {
-             return;
-         }
-         // Limit processing depth/frequency per node
-         let formatTimes = formatMap.get(target) || 0;
-         if (formatTimes > formatLimit) return;
-         formatMap.set(target, formatTimes + 1);
+    // --- Main Execution ---
 
-         // Process direct text node children
-         target.childNodes.forEach(node => {
-             if (node.nodeType === Node.TEXT_NODE && (cloudLinkRegex.test(node.nodeValue) || generalLinkRegex.test(node.nodeValue))) {
-                  cloudLinkRegex.lastIndex = 0; // Reset regex before use
-                  generalLinkRegex.lastIndex = 0;
-                  processNode(node);
-             }
-         });
-    }
-
-    // Run on existing content when script starts
-    function initialScan() {
-        console.log('[网盘助手] Starting initial scan (v1.4)...');
-        const allNodes = document.querySelectorAll('body *:not(script):not(style):not(textarea):not(a)'); // More targeted initial query
-        allNodes.forEach(processTarget);
-        console.log('[网盘助手] Initial scan finished.');
-    }
-
-    // Use MutationObserver for dynamically added content
-    const observer = new MutationObserver(mutations => {
-        mutations.forEach(mutation => {
-            if (mutation.type === 'childList') {
-                mutation.addedNodes.forEach(node => {
-                    if (node.nodeType === Node.ELEMENT_NODE) {
-                         // Process the added node itself and its children
-                         processTarget(node);
-                         node.querySelectorAll('*:not(script):not(style):not(textarea):not(a)').forEach(processTarget);
-                    } else if (node.nodeType === Node.TEXT_NODE) {
-                         // Process text node added directly (less common but possible)
-                         if (mutation.target && (cloudLinkRegex.test(node.nodeValue) || generalLinkRegex.test(node.nodeValue))) {
-                              cloudLinkRegex.lastIndex = 0;
-                              generalLinkRegex.lastIndex = 0;
-                              processNode(node);
-                         }
-                    }
-                });
-            } else if (mutation.type === 'characterData') {
-                 // Handle text changes within existing nodes
-                 if (mutation.target && mutation.target.nodeType === Node.TEXT_NODE && mutation.target.parentNode && (cloudLinkRegex.test(mutation.target.nodeValue) || generalLinkRegex.test(mutation.target.nodeValue))) {
-                     cloudLinkRegex.lastIndex = 0;
-                     generalLinkRegex.lastIndex = 0;
-                     processNode(mutation.target); // Re-process the changed text node
+    // 1. Process links on the current page (runs on all matched pages except excluded ones)
+    if (!Object.values(providers).some(p => window.location.hostname.includes(p.domain.split('/')[2]))) {
+        // Avoid running link processing on the target share pages themselves initially
+        console.log('[网盘助手] Script starting (v1.3) - Link Processing Mode');
+        // ... (TreeWalker logic - unchanged from v1.2)
+        const walker = document.createTreeWalker( /* ... filter logic ... */
+             document.body, NodeFilter.SHOW_TEXT, {
+                 acceptNode: function(node) { /* ... same filter as v1.2 ... */
+                    const parent = node.parentNode;
+                    if (parent.nodeName === 'SCRIPT' || parent.nodeName === 'STYLE' || parent.nodeName === 'TEXTAREA' || parent.nodeName === 'INPUT' || parent.isContentEditable || parent.closest('[contenteditable="true"]') || parent.closest(`.${linkSelectorClass}, .${fullUrlSelectorClass}`)) return NodeFilter.FILTER_REJECT;
+                    if (potentialLinkRegex.test(node.nodeValue) || /\/s\/|提取码|密码|口令|code|pwd/i.test(node.nodeValue)) { potentialLinkRegex.lastIndex = 0; return NodeFilter.FILTER_ACCEPT; } // Adjusted test slightly
+                    return NodeFilter.FILTER_REJECT;
                  }
-            }
-        });
-    });
+             }
+        );
+        const nodesToProcess = [];
+        let currentNode;
+        while (currentNode = walker.nextNode()) nodesToProcess.push(currentNode);
+        console.log(`[网盘助手] Found ${nodesToProcess.length} potential text nodes.`);
+        nodesToProcess.forEach(processNode);
+        console.log('[网盘助手] Link processing finished.');
+    }
 
-    // Start observing after initial scan might be better
-    // Use window.onload to ensure body exists for initial scan & observer
+
+    // 2. Try autofill if on a matched share page (runs only on specific share pages)
     window.addEventListener('load', () => {
-        // 1. Autofill check (runs only on specific share pages)
-        if (Object.values(providers).some(p => window.location.href.match(p.host) && window.location.pathname.startsWith(p.pathPrefix || '/'))) {
-             console.log('[网盘助手] On potential share page, attempting autofill...');
-             tryAutofillPassword();
-        }
-
-        // 2. Initial Link Scan (runs everywhere else)
-        initialScan();
-
-        // 3. Start MutationObserver
-        observer.observe(document.body, {
-            childList: true,
-            subtree: true,
-            characterData: true // Observe text changes too
-        });
-        console.log('[网盘助手] MutationObserver started.');
+         if (Object.values(providers).some(p => window.location.href.startsWith(p.domain + p.pathPrefix))) {
+              console.log('[网盘助手] On potential share page, attempting autofill...');
+              tryAutofillPassword();
+         }
     });
 
 })();
