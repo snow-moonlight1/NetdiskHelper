@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name              网盘智能识别助手,文本链接自动识别为超链接
 // @namespace         https://github.com/syhyz1990/panAI
-// @version           2.1.2
+// @version           2.1.3
 // @author            YouXiaoHou,52fisher,DreamNya(Improved by Gemini)
 // @description       智能识别选中文字中的🔗网盘链接和🔑提取码，通过正则表达式识别文本中的链接，并转换为超链接
 // @license           AGPL-3.0-or-later
@@ -461,19 +461,45 @@
                         this.lastText = 'lorem&';
                         selection.empty();
                         if (res.isConfirmed || res.dismiss === 'timer') {
-                            if (linkObj.storage == "local") {
+                            // 保存本地密码逻辑 (如果需要)
+                            if (linkObj.storage == "local" && pwd) { // 仅当 pwd 存在时才保存
                                 util.setValue(linkObj.storagePwdName, pwd);
                             }
                             let active = util.getValue('setting_active_in_front');
-                            if (pwd) {
-                                let extra = `${link}?pwd=${pwd}#${pwd}`;
-                                if (~link.indexOf('?')) {
-                                    extra = `${link}&pwd=${pwd}#${pwd}`;
+                        
+                            // --- URL 构建逻辑修正 ---
+                            let finalUrl = link; // 从 parseLink 获取的基础链接
+                        
+                            if (pwd) { // 如果 parsePwd 提取到了密码
+                                // 检查 link 是否已包含此密码 (query 或 hash)
+                                const cleanLinkBase = link.split('#')[0]; // 获取不带 hash 的部分
+                                const linkQuery = link.split('?')[1]?.split('#')[0] || ''; // 获取查询参数部分
+                                const linkHash = link.split('#')[1] || ''; // 获取 hash 部分
+                        
+                                let pwdFoundInLink = false;
+                                // 检查 query (宽松匹配 pwd=xxx 或 p=xxx)
+                                if (linkQuery) {
+                                    const queryParams = new URLSearchParams(linkQuery);
+                                    if (queryParams.get('pwd') === pwd || queryParams.get('p') === pwd) {
+                                        pwdFoundInLink = true;
+                                    }
                                 }
-                                GM_openInTab(extra, {active});
-                            } else {
-                                GM_openInTab(`${link}`, {active});
+                                // 检查 hash
+                                if (!pwdFoundInLink && linkHash === pwd) {
+                                    pwdFoundInLink = true;
+                                }
+                        
+                                // 只有当密码 *未* 在链接中找到时，才附加 #pwd
+                                if (!pwdFoundInLink) {
+                                    finalUrl = cleanLinkBase + "#" + pwd; // 附加为 hash
+                                }
+                                // else: 密码已在链接中，直接使用 parseLink 的结果 (finalUrl = link)
                             }
+                            // 如果 pwd 为空，则 finalUrl 就是原始的 link
+                        
+                            console.log("[PanAI smartIdentify] Opening URL:", finalUrl); // 调试日志
+                            GM_openInTab(finalUrl, { active }); // 使用修正后的 finalUrl 打开
+                            // --- URL 构建逻辑修正结束 ---
                         }
                     });
                 }
@@ -858,22 +884,40 @@
         return null;
     }
 
-    /**
+        /**
      * Extracts a potential 3-8 char password from text, looking for common patterns.
+     * Returns an object indicating password and its type ('query' or 'keyword').
      * @param {string} text - The text segment possibly containing the password.
-     * @returns {string|null} The extracted password or null.
+     * @returns {{password: string|null, type: 'query'|'keyword'|null}}
      */
     function extractPasswordFromText(text) {
-        if (typeof text !== 'string') return null;
-        // ---> 添加下面这行 <---
-        const cleanedText = cleanNoise(text); // 先清理一遍噪声！
+        const result = { password: null, type: null }; // 初始化返回对象
+        if (typeof text !== 'string') return result;
+
+        const cleanedText = cleanNoise(text); // 先清理可能干扰关键字匹配的噪声
         let match;
-        // 后续的正则匹配都使用 cleanedText 而不是原始的 text
-        match = cleanedText.match(/[?&](?:pwd|p|password|passwd)\s*[=:]?\s*([a-zA-Z0-9]{3,8})(?:\s|$|&)/i);
-        if (match && match[1]) return match[1];
+
+        // 优先匹配 Pattern 1: ?pwd=xxxx, &p=xxxx (Query Parameter)
+        // 使用 cleanedText 进行匹配，确保噪声不影响参数提取
+        match = cleanedText.match(/[?&](?:pwd|p|password|passwd)\s*[=:]?\s*([a-zA-Z0-9]{3,8})(?:[\s,&]|$)/i);
+        if (match && match[1]) {
+            result.password = match[1];
+            result.type = 'query'; // 标记来源为查询参数
+            // console.log("提取到密码 (Query):", result.password); // 调试日志
+            return result; // 找到查询参数密码，直接返回
+        }
+
+        // 如果没有查询参数密码，再匹配 Pattern 2: Keyword based (提取码, 密码等)
+        // 同样使用 cleanedText
         match = cleanedText.match(/(?:提取码|密码|访问码|驗證碼|验证码|pass|key)\s*[：:]?\s*([a-zA-Z0-9]{3,8})(?:\s|$)/i);
-        if (match && match[1]) return match[1];
-        return null;
+        if (match && match[1]) {
+            result.password = match[1];
+            result.type = 'keyword'; // 标记来源为关键字
+            // console.log("提取到密码 (Keyword):", result.password); // 调试日志
+            return result; // 找到关键字密码，返回
+        }
+        // console.log("未提取到密码"); // 调试日志
+        return result; // 未找到任何密码
     }
     // --- Modified processTextNode (Core logic changes here) ---
     function processTextNode(node) {
@@ -945,44 +989,56 @@
     
             // --- Process Based on Match Type ---
             if (matchType === 'baidu') {
-                const fullMatchedText = bestMatch[0];    // 原始匹配的完整文本 (例如 "/s/1abc删...?pwd=1234" 或 "/s/1xyz")
-                const potentialPathPart = bestMatch[1];  // 捕获组 /s/... (在新正则下，这通常等于 fullMatchedText)
-
-                // 1. 先从原始匹配文本中尝试提取密码
-                const password = extractPasswordFromText(fullMatchedText);
-
-                // 2. 清理路径本身（移除噪声和查询参数）
+                const fullMatchedText = bestMatch[0];    // 原始匹配的完整文本
+                const potentialPathPart = bestMatch[1];  // 捕获组 /s/...
+            
+                // 1. 尝试提取密码及其类型 (使用更新后的函数)
+                const passwordResult = extractPasswordFromText(fullMatchedText);
+                const password = passwordResult.password;
+                const passwordType = passwordResult.type; // 'query', 'keyword', or null
+            
+                // 2. 清理路径本身（移除噪声和所有查询参数）
                 const cleanedPath = cleanBaiduPath(potentialPathPart);
-
+            
                 if (cleanedPath) { // 确保路径清理后有效
                     let href = "https://pan.baidu.com" + cleanedPath; // 构建基础URL
-
-                    // 3. 如果提取到了密码，将其添加到 HASH 中
+            
+                    // 3. 根据密码类型构建最终 URL
+                    let titleText = `打开百度网盘链接`;
                     if (password) {
-                        href += "#" + password; // 使用 HASH 传递密码给 Function 1
+                        if (passwordType === 'query') {
+                            // --- 关键修改 ---
+                            // 如果密码来自 ?pwd=, 就在干净路径后重新附加 ?pwd=
+                            href += "?pwd=" + password;
+                            titleText += ` (密码内嵌)`; // 更新提示
+                        } else { // 包括 passwordType === 'keyword' 或其他意外情况
+                            // 如果密码来自关键字或其他方式, 使用 #hash 触发 Function 1
+                            href += "#" + password;
+                            titleText += ` (密码: ${password})`; // 提示密码
+                        }
                     }
-
+                    // 如果 password 为 null，href 就是基础 URL，title 也不加密码
+            
                     const a = createBaseHyperlink();
                     a.href = href;
                     a.textContent = fullMatchedText; // 链接显示原始匹配的文本
-                    a.title = `打开百度网盘链接 (点击自动处理密码)`;
+                    a.title = titleText; // 设置更清晰的 title
                     fragment.appendChild(a);
                     linkCreated = true;
                 } else {
-                    console.warn("[Linkifier] Baidu path cleaning failed for:", potentialPathPart);
+                     console.warn("[Linkifier] Baidu path cleaning failed for:", potentialPathPart);
                 }
-    
+            
             } else if (matchType === 'url') {
-                // Existing logic for full URLs (use cleanAndEnsureProtocol from previous step)
-                const coreUrlPart = bestMatch[1]; // Captured group from urlRegex
-                // Make sure cleanAndEnsureProtocol exists from the previous step's code!
+                // ... (处理普通 URL 的代码块保持不变) ...
+                // 确保你之前的 cleanAndEnsureProtocol 函数存在且工作正常
+                const coreUrlPart = bestMatch[1];
                  if (typeof cleanAndEnsureProtocol === 'function') {
-                    const cleanedHref = cleanAndEnsureProtocol(coreUrlPart); // Use the function from the previous step
-    
+                    const cleanedHref = cleanAndEnsureProtocol(coreUrlPart);
                     if (cleanedHref && cleanedHref.startsWith('https://')) {
                         const a = createBaseHyperlink();
                         a.href = cleanedHref;
-                        a.textContent = bestMatch[0]; // Use the full match from urlRegex
+                        a.textContent = bestMatch[0];
                         a.title = `打开链接 (清理后: ${cleanedHref})`;
                         fragment.appendChild(a);
                         linkCreated = true;
@@ -991,11 +1047,9 @@
                     }
                 } else {
                      console.error("[Linkifier] cleanAndEnsureProtocol function is missing!");
-                     // Fallback: treat as plain text if the required function isn't there
                      fragment.appendChild(document.createTextNode(bestMatch[0]));
-                     linkCreated = false; // Mark as not created
+                     linkCreated = false;
                 }
-    
             }
     
             // If this specific match was successfully turned into a link
