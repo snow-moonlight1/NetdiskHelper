@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name              网盘智能识别助手,文本链接自动识别为超链接
 // @namespace         https://github.com/syhyz1990/panAI
-// @version           2.1.3
+// @version           2.1.4
 // @author            YouXiaoHou,52fisher,DreamNya(Improved by Gemini)
 // @description       智能识别选中文字中的🔗网盘链接和🔑提取码，通过正则表达式识别文本中的链接，并转换为超链接
 // @license           AGPL-3.0-or-later
