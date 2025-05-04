@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name              网盘智能识别助手,文本链接自动识别为超链接
 // @namespace         https://github.com/syhyz1990/panAI
-// @version           2.1.1
+// @version           2.1.2
 // @author            YouXiaoHou,52fisher,DreamNya(Improved by Gemini)
 // @description       智能识别选中文字中的🔗网盘链接和🔑提取码，通过正则表达式识别文本中的链接，并转换为超链接
 // @license           AGPL-3.0-or-later
@@ -759,7 +759,7 @@
     main.init();
 })();
 
-
+//Function2:识别助手
 (function() {
     'use strict';
 
@@ -805,18 +805,9 @@
     // Allows noise characters within the path/query/fragment part ([^\s<>"]*)
     const urlRegex = /(?:https?:\/\/)?([\w.-]+\.[a-zA-Z]{2,}(?::\d{1,5})?(?:[/?#][^\s<>"]*)?)/gu;
         // Regex to find potential Baidu paths starting with /s/
-    // Captures the /s/ path part including potential noise and password info.
-    // Uses lookarounds to avoid including leading/trailing spaces in the main capture group.
-    const baiduPathRegex = /(?:\s|^)(\/s\/[a-zA-Z0-9~\[\]删\p{Emoji_Presentation}\p{Extended_Pictographic}\/?=&:：\w-]{8,})(?=\s|$)/gu;
-    // Explanation:
-    // (?:\s|^)        - Starts with space or beginning of line (non-capturing)
-    // (               - Start Capture Group 1: The core path part we need to clean/parse
-    //   \/s\/         - Literal "/s/"
-    //   [...]{8,}     - Matches 8+ chars that are: letters, numbers, ~, [], 删, emoji, ?, /, =, &, :, ：, word chars, hyphen
-    //                 - This is broad to capture the noisy segment including password info
-    // )               - End Capture Group 1
-    // (?=\s|$)        - Must be followed by space or end of line (positive lookahead, not captured)
-    // Flags: gu       - global, unicode
+        // 匹配以 /s/ 开头，后面跟着一系列非空白、非<>"字符的模式
+    // 捕获整个 /s/... 部分，允许包含噪声和可能的密码信息
+    const baiduPathRegex = /(\/s\/[^\s<>"]+)/gu;
         // --- Original v2.1.0 Constants ---
     const ignoredTags = new Set(['SCRIPT', 'STYLE', 'A', 'TEXTAREA', 'NOSCRIPT', 'CODE', 'TITLE', 'PRE', 'BUTTON', 'INPUT', 'SELECT']);
     const processedNodes = new WeakSet(); // Use WeakSet from original
@@ -843,7 +834,7 @@
         try {
             cleaned = cleaned.replace(/\p{Emoji_Presentation}|\p{Extended_Pictographic}/gu, '');
         } catch (e) { /* ignore emoji regex error */ }
-        cleaned = cleaned.replace(/[\u200B-\u200D\uFEFF]/g, '');
+        cleaned = cleaned.replace(/\[[^\]]*?\]|【[^】]*?】|（[^）]*?）|\([^)]*?\)/g, ''); // 处理多种括号，非贪婪匹配内部
         return cleaned;
     }
 
@@ -854,16 +845,17 @@
      */
     function cleanBaiduPath(pathPart) {
         if (typeof pathPart !== 'string') return null;
-        let cleaned = cleanNoise(pathPart); // First, remove general noise
-
-        // Remove password part (like ?pwd=... or &p=...) from the path itself
-        cleaned = cleaned.split(/[?&]/)[0]; // Take only the part before the first ? or &
-
-        // Basic validation: should still start with /s/ and have some length after it
-        if (/^\/s\/[a-zA-Z0-9~]{8,}/.test(cleaned)) { // Check for /s/ followed by a reasonable ID length
-            return cleaned;
+        let cleaned = cleanNoise(pathPart); // 使用更新后的 cleanNoise
+    
+        // 移除查询参数部分 (?pwd=... 或 &p=...)
+        cleaned = cleaned.split(/[?&]/)[0];
+    
+        // ---> 修改验证逻辑 <---
+        // 验证是否以 /s/ 开头，并且后面至少有一个合法的路径字符 (允许字母、数字、~、下划线、连字符)
+        if (/^\/s\/[a-zA-Z0-9~_-]/.test(cleaned)) {
+            return cleaned; // 返回清理掉查询参数后的路径
         }
-        return null; // Return null if cleaning resulted in an invalid path
+        return null;
     }
 
     /**
@@ -873,18 +865,15 @@
      */
     function extractPasswordFromText(text) {
         if (typeof text !== 'string') return null;
+        // ---> 添加下面这行 <---
+        const cleanedText = cleanNoise(text); // 先清理一遍噪声！
         let match;
-        // Pattern 1: ?pwd=xxxx, &p=xxxx etc. (common query param style)
-        // Looks for pwd, p, password etc., followed by =, maybe colon, optional space, then 3-8 alphanum chars
-        match = text.match(/[?&](?:pwd|p|password|passwd)\s*[=:]?\s*([a-zA-Z0-9]{3,8})(?:\s|$|&)/i);
+        // 后续的正则匹配都使用 cleanedText 而不是原始的 text
+        match = cleanedText.match(/[?&](?:pwd|p|password|passwd)\s*[=:]?\s*([a-zA-Z0-9]{3,8})(?:\s|$|&)/i);
         if (match && match[1]) return match[1];
-
-        // Pattern 2: Keyword based (提取码, 密码 etc.)
-        // Looks for keywords, optional space, colon (Chinese or English), optional space, then 3-8 alphanum chars
-        match = text.match(/(?:提取码|密码|访问码|驗證碼|验证码|pass|key)\s*[：:]?\s*([a-zA-Z0-9]{3,8})(?:\s|$)/i);
+        match = cleanedText.match(/(?:提取码|密码|访问码|驗證碼|验证码|pass|key)\s*[：:]?\s*([a-zA-Z0-9]{3,8})(?:\s|$)/i);
         if (match && match[1]) return match[1];
-
-        return null; // No password found
+        return null;
     }
     // --- Modified processTextNode (Core logic changes here) ---
     function processTextNode(node) {
@@ -956,25 +945,31 @@
     
             // --- Process Based on Match Type ---
             if (matchType === 'baidu') {
-                const potentialPathPart = bestMatch[1]; // Captured group 1 from baiduPathRegex
-                const password = extractPasswordFromText(fullMatchedText); // Extract pwd from the original full match
-                const cleanedPath = cleanBaiduPath(potentialPathPart); // Clean the path part itself
-    
-                if (cleanedPath) { // Ensure cleaning resulted in a valid path
-                    let href = "https://pan.baidu.com" + cleanedPath;
-                    // Embed password for Function 1's autofill (use hash primarily)
+                const fullMatchedText = bestMatch[0];    // 原始匹配的完整文本 (例如 "/s/1abc删...?pwd=1234" 或 "/s/1xyz")
+                const potentialPathPart = bestMatch[1];  // 捕获组 /s/... (在新正则下，这通常等于 fullMatchedText)
+
+                // 1. 先从原始匹配文本中尝试提取密码
+                const password = extractPasswordFromText(fullMatchedText);
+
+                // 2. 清理路径本身（移除噪声和查询参数）
+                const cleanedPath = cleanBaiduPath(potentialPathPart);
+
+                if (cleanedPath) { // 确保路径清理后有效
+                    let href = "https://pan.baidu.com" + cleanedPath; // 构建基础URL
+
+                    // 3. 如果提取到了密码，将其添加到 HASH 中
                     if (password) {
-                        href += "#" + password; // Add #password for Function 1 detection
+                        href += "#" + password; // 使用 HASH 传递密码给 Function 1
                     }
-    
-                    const a = createBaseHyperlink(); // Get base styled link
+
+                    const a = createBaseHyperlink();
                     a.href = href;
-                    a.textContent = fullMatchedText; // Display the original noisy text
+                    a.textContent = fullMatchedText; // 链接显示原始匹配的文本
                     a.title = `打开百度网盘链接 (点击自动处理密码)`;
                     fragment.appendChild(a);
                     linkCreated = true;
                 } else {
-                     console.warn("[Linkifier] Baidu path cleaning failed:", potentialPathPart);
+                    console.warn("[Linkifier] Baidu path cleaning failed for:", potentialPathPart);
                 }
     
             } else if (matchType === 'url') {
