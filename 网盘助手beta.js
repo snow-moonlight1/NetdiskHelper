@@ -833,7 +833,7 @@
         // Regex to find potential Baidu paths starting with /s/
         // 匹配以 /s/ 开头，后面跟着一系列非空白、非<>"字符的模式
     // 捕获整个 /s/... 部分，允许包含噪声和可能的密码信息
-    const baiduPathRegex = /(\/s\/[^\s<>"]+)/gu;
+    const baiduPathRegex = /(\/?s\/[^\s<>"]+)/gu;
         // --- Original v2.1.0 Constants ---
     const ignoredTags = new Set(['SCRIPT', 'STYLE', 'A', 'TEXTAREA', 'NOSCRIPT', 'CODE', 'TITLE', 'PRE', 'BUTTON', 'INPUT', 'SELECT']);
     const processedNodes = new WeakSet(); // Use WeakSet from original
@@ -873,13 +873,23 @@
         if (typeof pathPart !== 'string') return null;
         let cleaned = cleanNoise(pathPart); // 使用更新后的 cleanNoise
     
+            // 处理缺少前导斜杠的情况
+        if (cleaned.startsWith('s/') && !cleaned.startsWith('/s/')) {
+            cleaned = '/' + cleaned;
+        }
+
         // 移除查询参数部分 (?pwd=... 或 &p=...)
         cleaned = cleaned.split(/[?&]/)[0];
     
-        // ---> 修改验证逻辑 <---
-        // 验证是否以 /s/ 开头，并且后面至少有一个合法的路径字符 (允许字母、数字、~、下划线、连字符)
-        if (/^\/s\/[a-zA-Z0-9~_-]/.test(cleaned)) {
-            return cleaned; // 返回清理掉查询参数后的路径
+        // 更严格的验证规则 - 只允许URL合法字符
+        // 允许的字符: 字母数字、~、-、_、.、/、=、?、&、#
+        // 但不允许中文、emoji等
+        if (/^\/s\/[a-zA-Z0-9~_\-\.\/=?&#]+/.test(cleaned)) {
+            // 确保路径部分不包含非法字符
+            const pathOnly = cleaned.substring(3); // 去掉/s/
+            if (/^[a-zA-Z0-9~_\-\.]+/.test(pathOnly)) {
+                return cleaned.split(/[<>"'\s]/)[0]; // 在遇到这些字符时截断
+            }
         }
         return null;
     }
