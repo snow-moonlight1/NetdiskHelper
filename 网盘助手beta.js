@@ -789,57 +789,227 @@
 (function() {
     'use strict';
 
+    // --- TLD Set ---
+    // Extracted English TLDs from the provided list
+    const validTlds = new Set([
+        'aaa', 'aarp', 'abarth', 'abb', 'abbott', 'abbvie', 'abc', 'able', 'abogado', 'abudhabi',
+        'ac', 'academy', 'accenture', 'accountant', 'accountants', 'aco', 'active', 'actor', 'ad',
+        'adac', 'ads', 'adult', 'ae', 'aeg', 'aero', 'aetna', 'af', 'afamilycompany', 'afl',
+        'africa', 'ag', 'agakhan', 'agency', 'ai', 'aig', 'aigo', 'airbus', 'airforce', 'airtel',
+        'akdn', 'al', 'alfaromeo', 'alibaba', 'alipay', 'allfinanz', 'allstate', 'ally', 'alsace',
+        'alstom', 'am', 'amazon', 'americanexpress', 'americanfamily', 'amex', 'amfam', 'amica',
+        'amsterdam', 'analytics', 'android', 'anquan', 'anz', 'ao', 'aol', 'apartments', 'app',
+        'apple', 'aq', 'aquarelle', 'ar', 'arab', 'aramco', 'archi', 'army', 'arpa', 'art', 'arte',
+        'as', 'asda', 'asia', 'associates', 'at', 'athleta', 'attorney', 'au', 'auction', 'audi',
+        'audible', 'audio', 'auspost', 'author', 'auto', 'autos', 'avianca', 'aw', 'aws', 'ax',
+        'axa', 'az', 'azure', 'ba', 'baby', 'baidu', 'banamex', 'bananarepublic', 'band', 'bank',
+        'bar', 'barcelona', 'barclaycard', 'barclays', 'barefoot', 'bargains', 'baseball',
+        'basketball', 'bauhaus', 'bayern', 'bb', 'bbc', 'bbt', 'bbva', 'bcg', 'bcn', 'bd', 'be',
+        'beats', 'beauty', 'beer', 'bentley', 'berlin', 'best', 'bestbuy', 'bet', 'bf', 'bg', 'bh',
+        'bharti', 'bi', 'bible', 'bid', 'bike', 'bing', 'bingo', 'bio', 'biz', 'bj', 'black',
+        'blackfriday', 'blanco', 'blockbuster', 'blog', 'bloomberg', 'blue', 'bm', 'bms', 'bmw',
+        'bn', 'bnl', 'bnpparibas', 'bo', 'boats', 'boehringer', 'bofa', 'bom', 'bond', 'boo',
+        'book', 'booking', 'boots', 'bosch', 'bostik', 'boston', 'bot', 'boutique', 'box', 'bq',
+        'br', 'bradesco', 'bridgestone', 'broadway', 'broker', 'brother', 'brussels', 'bs', 'bt',
+        'budapest', 'bugatti', 'build', 'builders', 'business', 'buy', 'buzz', 'bv', 'bw', 'by',
+        'bz', 'bzh', 'ca', 'cab', 'cafe', 'cal', 'call', 'calvinklein', 'cam', 'camera', 'camp',
+        'cancerresearch', 'canon', 'capetown', 'capital', 'capitalone', 'car', 'caravan', 'cards',
+        'care', 'career', 'careers', 'cars', 'cartier', 'casa', 'case', 'caseih', 'cash',
+        'casino', 'cat', 'catering', 'catholic', 'cba', 'cbn', 'cbre', 'cbs', 'cc', 'cd', 'ceb',
+        'center', 'ceo', 'cern', 'cf', 'cfa', 'cfd', 'cg', 'ch', 'chanel', 'channel', 'charity',
+        'chase', 'chat', 'cheap', 'chintai', 'chloe', 'christmas', 'chrome', 'chrysler', 'church',
+        'ci', 'cipriani', 'circle', 'cisco', 'citadel', 'citi', 'citic', 'city', 'cityeats', 'ck',
+        'cl', 'claims', 'cleaning', 'click', 'clinic', 'clinique', 'clothing', 'cloud', 'club',
+        'clubmed', 'cm', 'cn', 'co', 'coach', 'codes', 'coffee', 'college', 'cologne', 'com',
+        'comcast', 'commbank', 'community', 'company', 'compare', 'computer', 'comsec', 'condos',
+        'construction', 'consulting', 'contact', 'contractors', 'cooking', 'cookingchannel',
+        'cool', 'coop', 'corsica', 'country', 'coupon', 'coupons', 'courses', 'cpa', 'cr',
+        'credit', 'creditcard', 'creditunion', 'cricket', 'crown', 'crs', 'cruise', 'cruises',
+        'csc', 'cu', 'cuisinella', 'cv', 'cw', 'cx', 'cy', 'cymru', 'cyou', 'cz', 'dabur', 'dad',
+        'dance', 'data', 'date', 'dating', 'datsun', 'day', 'dclk', 'dds', 'de', 'deal', 'dealer',
+        'deals', 'degree', 'delivery', 'dell', 'deloitte', 'delta', 'democrat', 'dental',
+        'dentist', 'desi', 'design', 'dev', 'dhl', 'diamonds', 'diet', 'digital', 'direct',
+        'directory', 'discount', 'discover', 'dish', 'diy', 'dj', 'dk', 'dm', 'dnp', 'do', 'docs',
+        'doctor', 'dodge', 'dog', 'doha', 'domains', 'doosan', 'dot', 'download', 'drive', 'dtv',
+        'dubai', 'duck', 'dunlop', 'duns', 'dupont', 'durban', 'dvag', 'dvr', 'dz', 'earth',
+        'eat', 'ec', 'eco', 'edeka', 'edu', 'education', 'ee', 'eg', 'email', 'emerck', 'energy',
+        'engineer', 'engineering', 'enterprises', 'epost', 'epson', 'equipment', 'er', 'ericsson',
+        'erni', 'es', 'esq', 'estate', 'esurance', 'et', 'etisalat', 'eu', 'eurovision', 'eus',
+        'events', 'everbank', 'exchange', 'expert', 'exposed', 'express', 'extraspace', 'fage',
+        'fail', 'fairwinds', 'faith', 'family', 'fan', 'fans', 'farm', 'farmers', 'fashion',
+        'fast', 'fedex', 'feedback', 'ferrari', 'ferrero', 'fi', 'fiat', 'fidelity', 'fido',
+        'film', 'final', 'finance', 'financial', 'fire', 'firestone', 'firmdale', 'fish',
+        'fishing', 'fit', 'fitness', 'fj', 'fk', 'flickr', 'flights', 'flir', 'florist',
+        'flowers', 'flsmidth', 'fly', 'fm', 'fo', 'foo', 'food', 'foodnetwork', 'football',
+        'ford', 'forex', 'forsale', 'forum', 'foundation', 'fox', 'fr', 'free', 'fresenius', 'frl',
+        'frogans', 'frontdoor', 'frontier', 'ftr', 'fujitsu', 'fujixerox', 'fun', 'fund',
+        'furniture', 'futbol', 'fyi', 'ga', 'gal', 'gallery', 'gallo', 'gallup', 'game', 'games',
+        'gap', 'garden', 'gay', 'gbiz', 'gd', 'gdn', 'ge', 'gea', 'gent', 'genting', 'george',
+        'gf', 'gg', 'ggee', 'gh', 'gi', 'gift', 'gifts', 'gives', 'giving', 'gl', 'glade',
+        'glass', 'gle', 'global', 'globo', 'gm', 'gmail', 'gmbh', 'gmo', 'gmx', 'gn', 'godaddy',
+        'gold', 'goldpoint', 'golf', 'goo', 'goodhands', 'goodyear', 'goog', 'google', 'gop',
+        'got', 'gov', 'gp', 'gq', 'gr', 'grainger', 'graphics', 'gratis', 'green', 'gripe',
+        'grocery', 'group', 'gs', 'gt', 'gu', 'guardian', 'gucci', 'guge', 'guide', 'guitars',
+        'guru', 'gw', 'gy', 'hair', 'hamburg', 'hangout', 'haus', 'hbo', 'hdfc', 'hdfcbank',
+        'health', 'healthcare', 'help', 'helsinki', 'here', 'hermes', 'hgtv', 'hiphop', 'hisamitsu',
+        'hitachi', 'hiv', 'hk', 'hkt', 'hm', 'hn', 'hockey', 'holdings', 'holiday', 'homedepot',
+        'homegoods', 'homes', 'homesense', 'honda', 'honeywell', 'horse', 'hospital', 'host',
+        'hosting', 'hot', 'hoteles', 'hotels', 'hotmail', 'house', 'how', 'hr', 'hsbc', 'ht',
+        'htc', 'hu', 'hughes', 'hyatt', 'hyundai', 'ibm', 'icbc', 'ice', 'icu', 'id', 'ie',
+        'ieee', 'ifm', 'iinet', 'ikano', 'il', 'im', 'imamat', 'imdb', 'immo', 'immobilien', 'in',
+        'inc', 'industries', 'infiniti', 'info', 'ing', 'ink', 'institute', 'insurance', 'insure',
+        'int', 'intel', 'international', 'intuit', 'investments', 'io', 'ipiranga', 'iq', 'ir',
+        'irish', 'is', 'iselect', 'ismaili', 'ist', 'istanbul', 'it', 'itau', 'itv', 'iveco',
+        'iwc', 'jaguar', 'java', 'jcb', 'jcp', 'je', 'jeep', 'jetzt', 'jewelry', 'jio', 'jlc',
+        'jll', 'jm', 'jmp', 'jnj', 'jo', 'jobs', 'joburg', 'jot', 'joy', 'jp', 'jpmorgan', 'jprs',
+        'juegos', 'juniper', 'kaufen', 'kddi', 'ke', 'kerryhotels', 'kerrylogistics',
+        'kerryproperties', 'kfh', 'kg', 'kh', 'ki', 'kia', 'kids', 'kim', 'kinder', 'kindle',
+        'kitchen', 'kiwi', 'km', 'kn', 'koeln', 'komatsu', 'kosher', 'kp', 'kpmg', 'kpn', 'kr',
+        'krd', 'kred', 'kuokgroup', 'kw', 'ky', 'kyoto', 'kz', 'la', 'lacaixa', 'ladbrokes',
+        'lamborghini', 'lamer', 'lancaster', 'lancia', 'lancome', 'land', 'landrover', 'lanxess',
+        'lasalle', 'lat', 'latino', 'latrobe', 'law', 'lawyer', 'lb', 'lc', 'lds', 'lease',
+        'leclerc', 'lefrak', 'legal', 'lego', 'lexus', 'lgbt', 'li', 'liaison', 'lidl', 'life',
+        'lifeinsurance', 'lifestyle', 'lighting', 'like', 'lilly', 'limited', 'limo', 'lincoln',
+        'linde', 'link', 'lipsy', 'live', 'living', 'lixil', 'lk', 'llc', 'llp', 'loan', 'loans',
+        'locker', 'locus', 'loft', 'lol', 'london', 'lotte', 'lotto', 'love', 'lpl',
+        'lplfinancial', 'lr', 'ls', 'lt', 'ltd', 'ltda', 'lu', 'lundbeck', 'lupin', 'luxe',
+        'luxury', 'lv', 'ly', 'ma', 'macys', 'madrid', 'maif', 'maison', 'makeup', 'man',
+        'management', 'mango', 'map', 'market', 'marketing', 'markets', 'marriott', 'marshalls',
+        'maserati', 'mattel', 'mba', 'mc', 'mcd', 'mcdonalds', 'mckinsey', 'md', 'me', 'med',
+        'media', 'meet', 'melbourne', 'meme', 'memorial', 'men', 'menu', 'meo', 'merckmsd',
+        'metlife', 'mg', 'mh', 'miami', 'microsoft', 'mil', 'mini', 'mint', 'mit', 'mitsubishi',
+        'mk', 'ml', 'mlb', 'mls', 'mm', 'mma', 'mn', 'mo', 'mobi', 'mobile', 'mobily', 'moda',
+        'moe', 'moi', 'mom', 'monash', 'money', 'monster', 'montblanc', 'mopar', 'mormon',
+        'mortgage', 'moscow', 'moto', 'motorcycles', 'mov', 'movie', 'movistar', 'mp', 'mq', 'mr',
+        'ms', 'msd', 'mt', 'mtn', 'mtpc', 'mtr', 'mu', 'museum', 'music', 'mutual', 'mutuelle',
+        'mv', 'mw', 'mx', 'my', 'mz', 'na', 'nab', 'nadex', 'nagoya', 'name', 'nationwide',
+        'natura', 'navy', 'nba', 'nc', 'ne', 'nec', 'net', 'netbank', 'netflix', 'network',
+        'neustar', 'new', 'newholland', 'news', 'next', 'nextdirect', 'nexus', 'nf', 'nfl', 'ng',
+        'ngo', 'nhk', 'ni', 'nico', 'nike', 'nikon', 'ninja', 'nissan', 'nissay', 'nl', 'no',
+        'nokia', 'northwesternmutual', 'norton', 'now', 'nowruz', 'nowtv', 'np', 'nr', 'nra',
+        'nrw', 'ntt', 'nu', 'nyc', 'nz', 'obi', 'observer', 'off', 'office', 'okinawa', 'olayan',
+        'olayangroup', 'oldnavy', 'ollo', 'om', 'omega', 'one', 'ong', 'onl', 'online',
+        'onyourside', 'ooo', 'open', 'oracle', 'orange', 'org', 'organic', 'orientexpress',
+        'origins', 'osaka', 'otsuka', 'ott', 'ovh', 'pa', 'page', 'pamperedchef', 'panasonic',
+        'panerai', 'paris', 'pars', 'partners', 'parts', 'party', 'passagens', 'pay', 'pccw', 'pe',
+        'pet', 'pf', 'pfizer', 'pg', 'ph', 'pharmacy', 'phd', 'philips', 'phone', 'photo',
+        'photography', 'photos', 'physio', 'piaget', 'pics', 'pictet', 'pictures', 'pid', 'pin',
+        'ping', 'pink', 'pioneer', 'pizza', 'pk', 'pl', 'place', 'play', 'playstation',
+        'plumbing', 'plus', 'pm', 'pn', 'pnc', 'pohl', 'poker', 'politie', 'porn', 'post', 'pr',
+        'pramerica', 'praxi', 'press', 'prime', 'pro', 'prod', 'productions', 'prof',
+        'progressive', 'promo', 'properties', 'property', 'protection', 'pru', 'prudential', 'ps',
+        'pt', 'pub', 'pw', 'pwc', 'py', 'qa', 'qpon', 'quebec', 'quest', 'qvc', 'racing', 'radio',
+        'raid', 're', 'read', 'realestate', 'realtor', 'realty', 'recipes', 'red', 'redstone',
+        'redumbrella', 'rehab', 'reise', 'reisen', 'reit', 'reliance', 'ren', 'rent', 'rentals',
+        'repair', 'report', 'republican', 'rest', 'restaurant', 'review', 'reviews', 'rexroth',
+        'rich', 'richardli', 'ricoh', 'rightathome', 'ril', 'rio', 'rip', 'rmit', 'ro', 'rocher',
+        'rocks', 'rodeo', 'rogers', 'room', 'rs', 'rsvp', 'ru', 'rugby', 'ruhr', 'run', 'rw',
+        'rwe', 'ryukyu', 'sa', 'saarland', 'safe', 'safety', 'sakura', 'sale', 'salon', 'samsclub',
+        'samsung', 'sandvik', 'sandvikcoromant', 'sanofi', 'sap', 'sapo', 'sarl', 'sas', 'save',
+        'saxo', 'sb', 'sbi', 'sbs', 'sc', 'sca', 'scb', 'schaeffler', 'schmidt', 'scholarships',
+        'school', 'schule', 'schwarz', 'science', 'scjohnson', 'scor', 'scot', 'sd', 'se',
+        'search', 'seat', 'secure', 'security', 'seek', 'select', 'sener', 'services', 'ses',
+        'seven', 'sew', 'sex', 'sexy', 'sfr', 'sg', 'sh', 'shangrila', 'sharp', 'shaw', 'shell',
+        'shia', 'shiksha', 'shoes', 'shop', 'shopping', 'shouji', 'showtime', 'shriram',
+        'si', 'silk', 'sina', 'singles', 'site', 'sj', 'sk', 'ski', 'skin', 'sky', 'skype', 'sl',
+        'sling', 'sm', 'smart', 'smile', 'sn', 'sncf', 'so', 'soccer', 'social', 'softbank',
+        'software', 'sohu', 'solar', 'solutions', 'song', 'sony', 'soy', 'spa', 'space',
+        'spiegel', 'sport', 'spot', 'spreadbetting', 'sr', 'srl', 'srt', 'ss', 'st', 'stada',
+        'staples', 'star', 'starhub', 'statebank', 'statefarm', 'statoil', 'stc', 'stcgroup',
+        'stockholm', 'storage', 'store', 'stream', 'studio', 'study', 'style', 'su', 'sucks',
+        'supplies', 'supply', 'support', 'surf', 'surgery', 'suzuki', 'sv', 'swatch',
+        'swiftcover', 'swiss', 'sx', 'sy', 'sydney', 'symantec', 'systems', 'sz', 'tab', 'taipei',
+        'talk', 'taobao', 'tatamotors', 'tatar', 'tattoo', 'tax', 'taxi', 'tc', 'tci',
+        'td', 'tdk', 'team', 'tech', 'technology', 'tel', 'telecity', 'telefonica', 'temasek',
+        'tennis', 'teva', 'tf', 'tg', 'th', 'thd', 'theater', 'theatre', 'tiaa', 'tickets',
+        'tienda', 'tiffany', 'tips', 'tires', 'tirol', 'tj', 'tjmaxx', 'tjx', 'tk', 'tkmaxx',
+        'tl', 'tm', 'tmall', 'tn', 'to', 'today', 'tokyo', 'tools', 'top', 'toray', 'toshiba',
+        'total', 'tours', 'town', 'toyota', 'toys', 'tr', 'trade', 'trading', 'training',
+        'travel', 'travelchannel', 'travelers', 'travelersinsurance', 'trust', 'trv', 'tt', 'tube',
+        'tui', 'tunes', 'tushu', 'tv', 'tvs', 'tw', 'tz', 'ua', 'ubank', 'ubs', 'uconnect', 'ug',
+        'uk', 'unicom', 'university', 'uno', 'uol', 'ups', 'us', 'uy', 'uz', 'va', 'vacations',
+        'vana', 'vanguard', 'vc', 've', 'vegas', 'ventures', 'verisign', 'versicherung', 'vet',
+        'vg', 'vi', 'viajes', 'video', 'vig', 'viking', 'villas', 'vin', 'vip', 'virgin', 'visa',
+        'vision', 'vista', 'vistaprint', 'viva', 'vivo', 'vlaanderen', 'vn', 'vodka',
+        'volkswagen', 'volvo', 'vote', 'voting', 'voto', 'voyage', 'vu', 'vuelos', 'wales',
+        'walmart', 'walter', 'wang', 'wanggou', 'warman', 'watch', 'watches', 'weather',
+        'weatherchannel', 'webcam', 'weber', 'website', 'wed', 'wedding', 'weibo', 'weir', 'wf',
+        'whoswho', 'wien', 'wiki', 'williamhill', 'win', 'windows', 'wine', 'winners', 'wme',
+        'wolterskluwer', 'woodside', 'work', 'works', 'world', 'wow', 'ws', 'wtc', 'wtf', 'xbox',
+        'xerox', 'xfinity', 'xihuan', 'xin', 'xperia', 'xxx', 'xyz', 'yachts', 'yahoo',
+        'yamaxun', 'yandex', 'ye', 'yodobashi', 'yoga', 'yokohama', 'you', 'youtube', 'yt', 'yun',
+        'za', 'zappos', 'zara', 'zero', 'zip', 'zippo', 'zm', 'zone', 'zuerich', 'zw'
+        // Note: 'gb', 'an', 'bl', 'bq', 'eh', 'mf', 'sj', 'tp', 'um' were marked as 'Reserved' or 'Not assigned' and omitted.
+        // Note: Test TLDs like '测试', 'испытание' etc. are omitted.
+        // Note: Non-English TLDs are omitted as requested.
+        // Note: 'arpa', 'mil', 'gov', 'edu', 'int' are technically TLDs but often handled specially or internal; included for completeness based on list.
+        // Note: '.test' itself is a reserved TLD for testing purposes, omitted from production linking.
+    ]);
+
     /**
      * Cleans specific noise (chars, bracketed text, emojis, invisible chars) from a URL part
-     * AND ensures 'https://' protocol is prepended if missing and looks like a domain.
+     * AND ensures 'https://' protocol is prepended if missing and looks like a structurally valid URL (hostname.tld).
      * @param {string} urlPart - The URL string (potentially without protocol) possibly containing noise.
-     * @returns {string} The cleaned URL string with 'https://://' prepended if it was missing and valid. Returns original if input invalid.
+     * @returns {string | null} The cleaned URL string with 'https://' prepended if it was missing and valid. Returns null if input invalid or cleaning fails.
      */
     function cleanAndEnsureProtocol(urlPart) {
         if (typeof urlPart !== 'string' || !urlPart) {
-            return urlPart; // Return input if not a non-empty string
+            return null; // Return null if not a non-empty string
         }
 
-        // 1. Noise Cleaning (same as before)
-        let cleaned = urlPart.replace(/删/g, '');
-        cleaned = cleaned.replace(/\[[^\]]+?\]/g, '');
-        try {
-            // Using specific properties might be safer than broad \p{Emoji}
-            cleaned = cleaned.replace(/\p{Emoji_Presentation}|\p{Extended_Pictographic}/gu, '');
-        } catch (e) {
-            console.warn("[Linkifier] Emoji regex cleaning may not be supported:", e);
-        }
-        cleaned = cleaned.replace(/[\u200B-\u200D\uFEFF]/g, ''); // Remove invisible chars
+        // 1. Basic Noise Cleaning (Keep it minimal here, TLD check is primary)
+        let cleaned = urlPart.trim();
+         // Remove specific problematic characters if needed, but be cautious not to break valid URLs
+         // cleaned = cleaned.replace(/删/g, '');
+         // cleaned = cleaned.replace(/\[[^\]]+?\]/g, '');
+         // cleaned = cleaned.replace(/[\u200B-\u200D\uFEFF]/g, ''); // Remove invisible chars
 
-        // 2. Ensure Protocol
+        // 2. Ensure Protocol - Only if it looks like a valid domain structure
+        //    This check is now less critical because TLD validation happens *before* calling this,
+        //    but it's a good final sanity check.
         if (!/^https?:\/\//i.test(cleaned)) {
-            // Check if it looks like a domain structure: word/.- chars, dot, 2+ letters
-            // Avoid adding protocol to things like ". /path" or just ".com"
-            if (/^[\w.-]+\.[a-zA-Z]{2,}/.test(cleaned) && cleaned.includes('.')) {
-                 // Check it doesn't *only* contain dots/hyphens before the TLD
-                 if (!/^[.-]+\.[a-zA-Z]{2,}$/.test(cleaned)) {
-                    cleaned = 'https://' + cleaned;
-                 }
-            }
+             // Basic structure check: contains a dot, doesn't start/end with dot/hyphen near TLD part
+             if (cleaned.includes('.') && /^[\w.-]+\.[a-zA-Z]{2,}$/.test(cleaned.split(/[/?#:]/)[0])) {
+                 cleaned = 'https://' + cleaned;
+             } else {
+                 // Doesn't look like a domain that needs a protocol prepended
+                 // If it already passed TLD check, it might be something like an IP or a file path that shouldn't get https://
+                 // Or maybe it was just the TLD itself. For safety, return null if we can't confidently add https.
+                 // However, since we call this *after* TLD check, we assume it IS a domain.
+                 cleaned = 'https://' + cleaned;
+             }
         }
-        return cleaned;
+
+        // 3. Final Validation: Check if the result is a plausible URL format
+        try {
+            new URL(cleaned); // Try parsing it
+            return cleaned;
+        } catch (e) {
+            // If adding https:// resulted in an invalid URL, reject it
+            console.warn("[Linkifier] Post-cleaning URL invalid:", cleaned, e);
+            return null;
+        }
     }
 
-    // --- Modified Regex ---
-    // Makes http(s):// optional (non-capturing group)
-    // Captures the main part (domain + TLD + optional port + optional path/query/fragment)
-    // Allows noise characters within the path/query/fragment part ([^\s<>"]*)
-    const urlRegex = /(?:https?:\/\/)?([\w.-]+\.[a-zA-Z]{2,}(?::\d{1,5})?(?:[/?#][^\s<>"]*)?)/gu;
-        // Regex to find potential Baidu paths starting with /s/
-        // 匹配以 /s/ 开头，后面跟着一系列非空白、非<>"字符的模式
-    // 捕获整个 /s/... 部分，允许包含噪声和可能的密码信息
+    // --- Regex Definitions ---
+    // URL Regex: Find potential URL structures. TLD validation will happen *after* match.
+    // - Optional http(s)://
+    // - Capture group 1: Hostname (letters, numbers, hyphen, dot) + TLD (letters, min 2) + Optional Port + Optional Path/Query/Fragment
+    // - Hostname MUST contain at least one dot.
+    // - TLD MUST be at least 2 letters (initial filter).
+    // - Allows paths/queries/fragments with a wide range of characters ([^\s<>"]*) - greedy.
+    const urlRegex = /(?:https?:\/\/)?([\w.-]*\w+\.[a-zA-Z]{2,}(?::\d{1,5})?(?:[/?#][^\s<>"]*)?)/gu;
+
+    // Baidu Path Regex: Find potential Baidu paths starting with /s/
     const baiduPathRegex = /(\/?s\/[^\s<>"]+)/gu;
-        // --- Original v2.1.0 Constants ---
+
+    // --- Original v2.1.0 Constants ---
     const ignoredTags = new Set(['SCRIPT', 'STYLE', 'A', 'TEXTAREA', 'NOSCRIPT', 'CODE', 'TITLE', 'PRE', 'BUTTON', 'INPUT', 'SELECT']);
     const processedNodes = new WeakSet(); // Use WeakSet from original
 
-    // --- Reintroduce createHyperlink, but modify its usage ---
-    function createBaseHyperlink() { // Create a basic styled link element
+    // --- Helper Functions (createBaseHyperlink, cleanNoise, cleanBaiduPath, extractPasswordFromText) ---
+    // (These functions remain the same as in your provided code, ensure they are present)
+    function createBaseHyperlink() {
         const a = document.createElement('a');
         a.target = '_blank';
         a.style.wordBreak = 'break-all';
@@ -848,96 +1018,90 @@
         return a;
     }
 
-        /**
-     * Removes noise (删, [], emoji, invisible) from a string.
-     * @param {string} text - Input string.
-     * @returns {string} Cleaned string.
-     */
     function cleanNoise(text) {
         if (typeof text !== 'string') return text;
-        
-        // 1. 基础清理（保留你的原逻辑）
         let cleaned = text
             .replace(/删/g, '')
             .replace(/\p{Emoji_Presentation}|\p{Extended_Pictographic}/gu, '') // Emoji
             .replace(/\[[^\]]*?\]|【[^】]*?】|（[^）]*?）|\([^)]*?\)/g, ''); // 括号
-    
-        // 2. 新增：彻底清理（合并到一行或使用续行符）
         cleaned = cleaned
-            .replace(/[^\x00-\x7F]/g, '')  // 移除非ASCII字符
-            .replace(/[^\w\-\.\/\?=&]/g, ''); // 白名单过滤
-    
-        return cleaned;
+            .replace(/[^\x00-\x7F]/g, '')  // Remove non-ASCII for cleaner matching (adjust if needed)
+            .replace(/[^\w\-\.\/\?=&:#]/g, ''); // Whitelist relevant URL chars + : #
+        return cleaned.trim(); // Trim whitespace
     }
 
-    /**
-     * Cleans a potential Baidu path part, removing noise AND any trailing password info.
-     * @param {string} pathPart - The noisy string starting with /s/...
-     * @returns {string} The cleaned path (e.g., /s/1abcxyz) or null if invalid.
-     */
     function cleanBaiduPath(pathPart) {
         if (typeof pathPart !== 'string') return null;
-        let cleaned = cleanNoise(pathPart); // 使用更新后的 cleanNoise
-    
-            // 处理缺少前导斜杠的情况
-        if (cleaned.startsWith('s/') && !cleaned.startsWith('/s/')) {
-            cleaned = '/' + cleaned;
-        }
+        // Simplified cleaning for Baidu path: remove noise AFTER finding pwd if needed
+        // Basic noise removal first:
+        let cleaned = pathPart.replace(/删|\[[^\]]*?\]|\p{Emoji_Presentation}|\p{Extended_Pictographic}|[\u200B-\u200D\uFEFF]/gu, '').trim();
 
-        // 移除查询参数部分 (?pwd=... 或 &p=...)
-        cleaned = cleaned.split(/[?&]/)[0];
-    
-        // 更严格的验证规则 - 只允许URL合法字符
-        // 允许的字符: 字母数字、~、-、_、.、/、=、?、&、#
-        // 但不允许中文、emoji等
-        if (/^\/s\/[a-zA-Z0-9~_\-\.\/=?&#]+/.test(cleaned)) {
-            // 确保路径部分不包含非法字符
-            const pathOnly = cleaned.substring(3); // 去掉/s/
-            if (/^[a-zA-Z0-9~_\-\.]+/.test(pathOnly)) {
-                return cleaned.split(/[<>"'\s]/)[0]; // 在遇到这些字符时截断
-            }
+
+        // Extract the core path part before query/fragment
+        const corePathMatch = cleaned.match(/^(\/s\/[a-zA-Z0-9~_\-\.]+)/);
+        if (!corePathMatch) return null; // Basic structure invalid
+
+        let finalPath = corePathMatch[1];
+
+        // Ensure it actually looks like a Baidu path
+        if (/^\/s\/[a-zA-Z0-9~_\-\.]+/.test(finalPath)) {
+             // Optionally, truncate at the first invalid char if strictness is needed
+             // finalPath = finalPath.split(/[<>"'\s]/)[0];
+            return finalPath;
         }
         return null;
     }
 
-        /**
-     * Extracts a potential 3-8 char password from text, looking for common patterns.
-     * Returns an object indicating password and its type ('query' or 'keyword').
-     * @param {string} text - The text segment possibly containing the password.
-     * @returns {{password: string|null, type: 'query'|'keyword'|null}}
-     */
     function extractPasswordFromText(text) {
-        const result = { password: null, type: null }; // 初始化返回对象
+        const result = { password: null, type: null };
         if (typeof text !== 'string') return result;
 
-        const cleanedText = cleanNoise(text); // 先清理可能干扰关键字匹配的噪声
+        // Clean minimal noise that might interfere with keywords/params
+        const preCleanedText = text.replace(/[\u200B-\u200D\uFEFF]/g, ''); // Remove invisible chars
+
         let match;
 
-        // 优先匹配 Pattern 1: ?pwd=xxxx, &p=xxxx (Query Parameter)
-        // 使用 cleanedText 进行匹配，确保噪声不影响参数提取
-        match = cleanedText.match(/[?&](?:pwd|p|password|passwd)\s*[=:]?\s*([a-zA-Z0-9]{3,8})(?:[\s,&]|$)/i);
+        // Pattern 1: ?pwd=xxxx, &p=xxxx (Query Parameter style) - Allow space around '='
+        // Match 3-8 alphanumeric characters
+        match = preCleanedText.match(/[?&](?:pwd|p|password|passwd)\s*[=:]?\s*([a-zA-Z0-9]{3,8})(?:[\s,&<>"']|$)/i);
         if (match && match[1]) {
             result.password = match[1];
-            result.type = 'query'; // 标记来源为查询参数
-            // console.log("提取到密码 (Query):", result.password); // 调试日志
-            return result; // 找到查询参数密码，直接返回
+            result.type = 'query';
+            return result;
         }
 
-        // 如果没有查询参数密码，再匹配 Pattern 2: Keyword based (提取码, 密码等)
-        // 同样使用 cleanedText
-        match = cleanedText.match(/(?:提取码|密码|访问码|驗證碼|验证码|pass|key)\s*[：:]?\s*([a-zA-Z0-9]{3,8})(?:\s|$)/i);
+        // Pattern 2: Keyword based - Allow space around ':' or chinese colon '：'
+        // Match 3-8 alphanumeric characters
+        match = preCleanedText.match(/(?:提取码|密码|访问码|驗證碼|验证码|pass(?:word)?|key)\s*[：:]?\s*([a-zA-Z0-9]{3,8})(?:[\s,&<>"']|$)/i);
         if (match && match[1]) {
             result.password = match[1];
-            result.type = 'keyword'; // 标记来源为关键字
-            // console.log("提取到密码 (Keyword):", result.password); // 调试日志
-            return result; // 找到关键字密码，返回
+            result.type = 'keyword';
+            return result;
         }
-        // console.log("未提取到密码"); // 调试日志
-        return result; // 未找到任何密码
+        return result; // No password found
     }
+
+    /**
+     * Extracts the potential TLD from a hostname string.
+     * Handles basic hostnames and subdomains.
+     * @param {string} hostname - The hostname part (e.g., "www.example.co.uk", "example.com").
+     * @returns {string | null} The potential TLD in lowercase (e.g., "uk", "com") or null.
+     */
+    function extractTld(hostname) {
+        if (!hostname || typeof hostname !== 'string') return null;
+        const parts = hostname.split('.');
+        if (parts.length < 2) return null; // Need at least domain.tld
+        const potentialTld = parts[parts.length - 1];
+        // Basic check: Ensure it's letters only and has a reasonable length
+        if (/^[a-zA-Z]{2,}$/.test(potentialTld)) {
+            return potentialTld.toLowerCase();
+        }
+        return null;
+    }
+
+
     // --- Modified processTextNode (Core logic changes here) ---
     function processTextNode(node) {
-        // --- Keep the initial checks from the original function ---
         if (processedNodes.has(node) || node.nodeType !== Node.TEXT_NODE || !node.nodeValue?.trim()) {
             return;
         }
@@ -945,41 +1109,33 @@
         if (!parent) return;
         let currentParent = parent;
         while (currentParent && currentParent !== document.body) {
-            if (ignoredTags.has(currentParent.nodeName) || currentParent.isContentEditable || currentParent.nodeName === 'A') { // Added 'A' check
+            if (ignoredTags.has(currentParent.nodeName) || currentParent.isContentEditable || currentParent.nodeName === 'A') {
                 return;
             }
             currentParent = currentParent.parentNode;
         }
         if (!currentParent) return;
-        // --- End initial checks ---
-    
+
         const text = node.nodeValue;
         let lastIndex = 0;
         const fragment = document.createDocumentFragment();
-        let foundAnyLink = false; // Track if any link is made for this node
-    
+        let foundAnyLink = false;
+
         // --- Main Processing Loop ---
         while (lastIndex < text.length) {
-            // Set search start for both regexes
+            // Reset lastIndex for regexes
             baiduPathRegex.lastIndex = lastIndex;
-            urlRegex.lastIndex = lastIndex; // Use the general URL regex from previous step
-    
-            // Find the next match for both patterns
+            urlRegex.lastIndex = lastIndex;
+
             const baiduMatch = baiduPathRegex.exec(text);
-            const urlMatch = urlRegex.exec(text); // The regex for full URLs (e.g., https://...)
-    
-            // Determine which match comes first (if any)
+            const urlMatch = urlRegex.exec(text);
+
             let bestMatch = null;
             let matchType = null; // 'baidu' or 'url'
-    
+
             if (baiduMatch && urlMatch) {
-                if (baiduMatch.index <= urlMatch.index) {
-                    bestMatch = baiduMatch;
-                    matchType = 'baidu';
-                } else {
-                    bestMatch = urlMatch;
-                    matchType = 'url';
-                }
+                bestMatch = baiduMatch.index <= urlMatch.index ? baiduMatch : urlMatch;
+                matchType = baiduMatch.index <= urlMatch.index ? 'baidu' : 'url';
             } else if (baiduMatch) {
                 bestMatch = baiduMatch;
                 matchType = 'baidu';
@@ -987,213 +1143,289 @@
                 bestMatch = urlMatch;
                 matchType = 'url';
             }
-    
-            // If no more matches found in the remainder of the text, exit loop
+
             if (!bestMatch) {
-                break;
+                break; // No more matches
             }
-    
+
             const matchIndex = bestMatch.index;
-            const fullMatchedText = bestMatch[0].trim(); // Use the full match, trim leading/trailing space if any captured by lookarounds
-    
+            const fullMatchedText = bestMatch[0]; // Use the raw matched text for display
+
             // Add text before this match
             if (matchIndex > lastIndex) {
                 fragment.appendChild(document.createTextNode(text.substring(lastIndex, matchIndex)));
             }
-    
-            let linkCreated = false; // Track if *this* match results in a link
-    
+
+            let linkCreated = false;
+
             // --- Process Based on Match Type ---
             if (matchType === 'baidu') {
-                const fullMatchedText = bestMatch[0];    // 原始匹配的完整文本
-                const potentialPathPart = bestMatch[1];  // 捕获组 /s/...
-            
-                // 1. 尝试提取密码及其类型 (使用更新后的函数)
+                 // --- Baidu Logic (Mostly Unchanged) ---
+                const potentialPathPart = bestMatch[1]; // Captured /s/... part
+
+                // 1. Extract password from the *full matched text* (might be around the path)
                 const passwordResult = extractPasswordFromText(fullMatchedText);
                 const password = passwordResult.password;
-                const passwordType = passwordResult.type; // 'query', 'keyword', or null
-            
-                // 2. 清理路径本身（移除噪声和所有查询参数）
+                const passwordType = passwordResult.type;
+
+                // 2. Clean the path part itself
                 const cleanedPath = cleanBaiduPath(potentialPathPart);
-            
-                if (cleanedPath) { // 确保路径清理后有效
-                    let href = "https://pan.baidu.com" + cleanedPath; // 构建基础URL
-            
-                    // 3. 根据密码类型构建最终 URL
+
+                if (cleanedPath) {
+                    let href = "https://pan.baidu.com" + cleanedPath;
                     let titleText = `打开百度网盘链接`;
+
                     if (password) {
                         if (passwordType === 'query') {
-                            // --- 关键修改 ---
-                            // 如果密码来自 ?pwd=, 就在干净路径后重新附加 ?pwd=
-                            href += "?pwd=" + password;
-                            titleText += ` (密码内嵌)`; // 更新提示
-                        } else { // 包括 passwordType === 'keyword' 或其他意外情况
-                            // 如果密码来自关键字或其他方式, 使用 #hash 触发 Function 1
-                            href += "#" + password;
-                            titleText += ` (密码: ${password})`; // 提示密码
-                        }
+                            // If pwd was found like ?pwd=, attempt to append cleanly
+                             href += (href.includes('?') ? '&' : '?') + "pwd=" + password;
+                             titleText += ` (密码内嵌)`;
+                         } else { // Keyword type
+                             href += "#" + password; // Use hash for keyword passwords
+                             titleText += ` (密码: ${password})`;
+                         }
                     }
-                    // 如果 password 为 null，href 就是基础 URL，title 也不加密码
-            
+
                     const a = createBaseHyperlink();
                     a.href = href;
-                    a.textContent = fullMatchedText; // 链接显示原始匹配的文本
-                    a.title = titleText; // 设置更清晰的 title
+                    a.textContent = fullMatchedText; // Show original text
+                    a.title = titleText;
                     fragment.appendChild(a);
                     linkCreated = true;
                 } else {
                      console.warn("[Linkifier] Baidu path cleaning failed for:", potentialPathPart);
-                }
-            
+                 }
+
+
             } else if (matchType === 'url') {
-                // ... (处理普通 URL 的代码块保持不变) ...
-                // 确保你之前的 cleanAndEnsureProtocol 函数存在且工作正常
-                const coreUrlPart = bestMatch[1];
-                 if (typeof cleanAndEnsureProtocol === 'function') {
-                    const cleanedHref = cleanAndEnsureProtocol(coreUrlPart);
-                    if (cleanedHref && cleanedHref.startsWith('https://')) {
+                // --- URL Logic with TLD Validation ---
+                const potentialUrlPart = bestMatch[1]; // The captured part (hostname.tld...)
+                const originalFullMatch = bestMatch[0]; // The originally matched text including potential http://
+
+                // 1. Extract Hostname: Get the part before the first path/query/fragment/port
+                const hostAndPortMatch = potentialUrlPart.match(/^[\w.-]+/);
+                const hostname = hostAndPortMatch ? hostAndPortMatch[0] : null;
+
+                // 2. Extract TLD from Hostname
+                const tld = hostname ? extractTld(hostname) : null;
+
+                // 3. *** Validate TLD ***
+                if (tld && validTlds.has(tld)) {
+                    // 4. If TLD is valid, clean and ensure protocol
+                    const cleanedHref = cleanAndEnsureProtocol(potentialUrlPart); // Pass the captured part for cleaning
+
+                    if (cleanedHref) { // Ensure cleaning and protocol addition was successful
                         const a = createBaseHyperlink();
                         a.href = cleanedHref;
-                        a.textContent = bestMatch[0];
-                        a.title = `打开链接 (清理后: ${cleanedHref})`;
+                        // Display the text exactly as it was found in the page
+                        a.textContent = originalFullMatch;
+                        a.title = `打开链接 (TLD: .${tld})`; // Add TLD info to title
                         fragment.appendChild(a);
                         linkCreated = true;
                     } else {
-                         console.warn("[Linkifier] URL cleaning/protocol failed:", bestMatch[0]);
+                         console.warn("[Linkifier] URL cleaning/protocol failed after TLD check:", originalFullMatch);
                     }
                 } else {
-                     console.error("[Linkifier] cleanAndEnsureProtocol function is missing!");
-                     fragment.appendChild(document.createTextNode(bestMatch[0]));
-                     linkCreated = false;
+                    // TLD is invalid or not extracted, treat as plain text
+                    // console.log(`[Linkifier] Invalid or no TLD found for "${hostname}", TLD extracted: "${tld}". Original match: "${originalFullMatch}"`);
                 }
             }
-    
-            // If this specific match was successfully turned into a link
+
+            // --- Update Loop State ---
             if (linkCreated) {
-                foundAnyLink = true; // Mark that at least one link was made in this node
-                lastIndex = matchIndex + bestMatch[0].length; // Advance past the original full match length
+                foundAnyLink = true;
+                lastIndex = matchIndex + fullMatchedText.length; // Advance past the original matched text
             } else {
-                // If no link was created for this match (e.g., cleaning failed),
-                // append the matched text as plain text and advance lastIndex minimally.
-                fragment.appendChild(document.createTextNode(fullMatchedText)); // Add the raw matched text
-                 // Advance past the raw match to avoid re-matching the same failed segment
-                lastIndex = matchIndex + bestMatch[0].length;
-                // Ensure progress even if length was 0 (unlikely)
-                if (lastIndex <= matchIndex) {
-                     lastIndex = matchIndex + 1;
-                }
+                // If no link was created (Baidu cleaning failed OR Invalid TLD)
+                // Append the raw matched text as plain text and advance
+                fragment.appendChild(document.createTextNode(fullMatchedText));
+                lastIndex = matchIndex + fullMatchedText.length;
+                 // Ensure progress even if length was 0 (unlikely but safe)
+                 if (lastIndex <= matchIndex) {
+                      lastIndex = matchIndex + 1;
+                 }
             }
-    
-             // Safety break for infinite loops (shouldn't happen with current logic)
-             if (lastIndex <= matchIndex && linkCreated) {
-                 console.error("Linkifier infinite loop detected, breaking.");
-                 break;
-             }
-    
-    
         } // End while loop
-    
+
         // --- Append remaining text and replace node ---
         if (lastIndex < text.length) {
             fragment.appendChild(document.createTextNode(text.substring(lastIndex)));
         }
-    
-        if (foundAnyLink) { // Only replace if we actually made links
+
+        if (foundAnyLink) {
             try {
                 if (node.parentNode) {
+                    // Replace the original text node with the fragment
                     node.parentNode.replaceChild(fragment, node);
-                    processedNodes.add(node); // Mark original node
+                    // We don't add the *original* node to processedNodes anymore,
+                    // because its content is gone. We rely on not re-processing
+                    // the *new* text nodes and link nodes we just inserted.
+                    // The TreeWalker filter should prevent descending into new 'A' tags.
                 }
             } catch (e) {
                 console.warn('[网盘智能识别助手] Error replacing text node:', e);
+                 processedNodes.add(node); // Mark original node as processed if replacement failed
             }
         } else {
-            // Mark as processed even if no links found, to avoid re-checking
+             // Mark as processed even if no links were found in this specific node
+             // to prevent re-checking the exact same text content unnecessarily.
              processedNodes.add(node);
         }
     } // --- End of processTextNode Function Body ---
 
-    // --- scanForLinks (Use original structure, calls modified processTextNode) ---
+
+    // --- scanForLinks (Modified Filter) ---
     function scanForLinks(rootNode) {
-        // Use TreeWalker for efficiency (same as original v2.1.0 structure)
         const walker = document.createTreeWalker(
             rootNode,
             NodeFilter.SHOW_TEXT,
-            { // Filter can be adapted from original
+            { // Filter function
                 acceptNode: function(node) {
+                    // 1. Skip if already processed
+                    if (processedNodes.has(node)) return NodeFilter.FILTER_REJECT;
+
+                    // 2. Check parent hierarchy for ignored tags, contentEditable, or existing links
                     let parent = node.parentNode;
                     while (parent && parent !== rootNode && parent !== document.body) {
-                        if (ignoredTags.has(parent.nodeName) || parent.isContentEditable) return NodeFilter.FILTER_REJECT;
+                        if (ignoredTags.has(parent.nodeName) || parent.isContentEditable || parent.nodeName === 'A') {
+                            return NodeFilter.FILTER_REJECT; // Reject node and its children if parent is bad
+                        }
                         parent = parent.parentNode;
                     }
-                    if (rootNode.nodeType === Node.ELEMENT_NODE && (ignoredTags.has(rootNode.nodeName) || rootNode.isContentEditable)) return NodeFilter.FILTER_REJECT;
-                    // Crucially, check immediate parent isn't already a link
-                    if (node.parentNode && node.parentNode.nodeName === 'A') {
-                       return NodeFilter.FILTER_REJECT;
+                     // Check rootNode itself if it's an element being scanned directly
+                     if (rootNode.nodeType === Node.ELEMENT_NODE && (ignoredTags.has(rootNode.nodeName) || rootNode.isContentEditable)) {
+                         return NodeFilter.FILTER_REJECT;
+                     }
+
+                    // 3. Accept non-empty text nodes that passed the checks
+                    if (node.nodeValue?.trim()) {
+                        return NodeFilter.FILTER_ACCEPT;
                     }
-                    if (node.nodeValue?.trim()) return NodeFilter.FILTER_ACCEPT; // Process non-empty text nodes
+
+                    // 4. Skip empty text nodes
                     return NodeFilter.FILTER_SKIP;
                 }
             },
-            false
+            false // Set to false for compatibility, true might be slightly faster but requires browser support
         );
 
         let node;
-        const nodesToProcess = []; // Collect first
+        const nodesToProcess = [];
         while (node = walker.nextNode()) {
-           nodesToProcess.push(node);
+            // Check again right before adding, in case the DOM changed mid-walk
+            if (!processedNodes.has(node) && node.parentNode && node.parentNode.nodeName !== 'A') {
+               nodesToProcess.push(node);
+            }
         }
-        nodesToProcess.forEach(processTextNode); // Process collected nodes
+        // Process collected nodes *after* the walk is complete
+        nodesToProcess.forEach(n => {
+            // Final check before processing
+            if (!processedNodes.has(n) && n.parentNode && !ignoredTags.has(n.parentNode.nodeName) && n.parentNode.nodeName !== 'A' && !n.parentNode.isContentEditable) {
+                 processTextNode(n);
+            } else {
+                 processedNodes.add(n); // Mark as processed if skipped here
+            }
+        });
     }
 
-    // --- MutationObserver (Use original structure, calls modified scanForLinks/processTextNode) ---
+    // --- MutationObserver (Largely Unchanged, relies on scanForLinks filter) ---
     const observer = new MutationObserver(mutations => {
+        // Use a Set to avoid scanning the same root multiple times per batch
         const rootsToScan = new Set();
+        let requiresFullScan = false;
+
         mutations.forEach(mutation => {
             if (mutation.type === 'childList') {
                 mutation.addedNodes.forEach(newNode => {
-                    // Decide whether to process the node directly or scan its parent/subtree
+                    // If a significant number of nodes are added, maybe do a full rescan?
+                    // For now, scan the parent or the node itself if it's an element.
                     if (newNode.nodeType === Node.TEXT_NODE && newNode.parentNode) {
+                        // Check parent validity before adding root
                         let parent = newNode.parentNode; let ignore = false;
                         while(parent && parent !== document.body) { if(ignoredTags.has(parent.nodeName) || parent.isContentEditable || parent.nodeName === 'A') { ignore = true; break; } parent = parent.parentNode; }
-                        if (!ignore && newNode.parentNode.nodeType === Node.ELEMENT_NODE) rootsToScan.add(newNode.parentNode); // Scan parent element
-                        else if (!ignore) processTextNode(newNode); // Process text node directly if parent checks ok but isn't element
+                        if (!ignore && newNode.parentNode.nodeType === Node.ELEMENT_NODE) rootsToScan.add(newNode.parentNode);
 
                     } else if (newNode.nodeType === Node.ELEMENT_NODE) {
-                        let parent = newNode; let ignoreSubtree = false;
-                        while(parent && parent !== document.body) { if(ignoredTags.has(parent.nodeName) || parent.isContentEditable) { ignoreSubtree = true; break; } parent = parent.parentNode; }
-                        if (!ignoreSubtree) rootsToScan.add(newNode); // Scan added element subtree
+                         // Check if the new element itself or its parents should be ignored
+                         let ignoreSubtree = false; let checkNode = newNode;
+                         while(checkNode && checkNode !== document.body) {
+                             if (ignoredTags.has(checkNode.nodeName) || checkNode.isContentEditable) {
+                                 ignoreSubtree = true; break;
+                             }
+                             checkNode = checkNode.parentNode;
+                         }
+                         if (!ignoreSubtree) rootsToScan.add(newNode); // Scan the added element subtree
                     }
                 });
-            } else if (mutation.type === 'characterData' && mutation.target.nodeType === Node.TEXT_NODE) {
-                 // If text content changes, re-scan the parent element
-                 if(mutation.target.parentNode) {
+                 // Optional: If nodes were removed, potentially re-scan parent if needed (more complex)
+                 // mutation.removedNodes.forEach(removedNode => { ... });
+
+            } else if (mutation.type === 'characterData') {
+                 // If text content changes, re-scan the parent element containing the text node
+                 if (mutation.target && mutation.target.nodeType === Node.TEXT_NODE && mutation.target.parentNode) {
                      let parent = mutation.target.parentNode; let ignore = false;
                      while(parent && parent !== document.body) { if(ignoredTags.has(parent.nodeName) || parent.isContentEditable || parent.nodeName === 'A') { ignore = true; break; } parent = parent.parentNode; }
                      if (!ignore && mutation.target.parentNode.nodeType === Node.ELEMENT_NODE) {
-                        rootsToScan.add(mutation.target.parentNode);
+                         // Mark the text node itself as needing reprocessing by removing from WeakSet
+                         processedNodes.delete(mutation.target);
+                         rootsToScan.add(mutation.target.parentNode);
                      }
-                     // Avoid direct processing on charData unless necessary, parent scan is safer
                  }
             }
         });
-        rootsToScan.forEach(node => scanForLinks(node)); // Scan affected roots
+
+        // Scan affected roots efficiently
+        rootsToScan.forEach(node => {
+            // Check if the node is still in the document before scanning
+             if (document.body.contains(node)) {
+                 scanForLinks(node);
+             }
+        });
     });
 
-    // --- Initialization (Use original structure) ---
-    if (document.body) {
-       scanForLinks(document.body); // Initial scan
-       observer.observe(document.body, { childList: true, subtree: true, characterData: true }); // Start observing
-    } else {
-       document.addEventListener('DOMContentLoaded', () => {
-         if(document.body) {
-             scanForLinks(document.body);
-             observer.observe(document.body, { childList: true, subtree: true, characterData: true });
-         }
-       }, { once: true });
+    // --- Debounce function ---
+    function debounce(func, wait) {
+        let timeout;
+        return function executedFunction(...args) {
+            const later = () => {
+                clearTimeout(timeout);
+                func(...args);
+            };
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+        };
     }
 
+    // --- Initialization ---
+     const debouncedInitialScan = debounce(() => {
+         if (document.body && !document.body.dataset.linkifierScanComplete) {
+             console.log("[Linkifier] Starting initial scan...");
+             scanForLinks(document.body);
+             document.body.dataset.linkifierScanComplete = "true"; // Mark body scan as done
+             // Start observing *after* the initial scan might have settled things
+             observer.observe(document.body, {
+                 childList: true,
+                 subtree: true,
+                 characterData: true // Observe text changes
+             });
+             console.log("[Linkifier] Initial scan complete, observer started.");
+         } else if (!document.body) {
+             console.warn("[Linkifier] Document body not ready for initial scan.");
+         }
+     }, 500); // Wait 500ms after idle/load before scanning
+
+     // Try on idle, fallback to DOMContentLoaded
+     if (document.readyState === 'complete' || document.readyState === 'interactive') {
+         debouncedInitialScan();
+     } else {
+         document.addEventListener('DOMContentLoaded', debouncedInitialScan, { once: true });
+     }
+
+
     // Optional: Cleanup observer on page unload
-    // window.addEventListener('unload', () => observer.disconnect());
+    window.addEventListener('unload', () => {
+       if (observer) observer.disconnect();
+       console.log("[Linkifier] Observer disconnected.");
+    });
 
 })();
