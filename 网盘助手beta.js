@@ -855,12 +855,18 @@
      */
     function cleanNoise(text) {
         if (typeof text !== 'string') return text;
-        let cleaned = text.replace(/删/g, '');
-        cleaned = cleaned.replace(/\[[^\]]+?\]/g, '');
-        try {
-            cleaned = cleaned.replace(/\p{Emoji_Presentation}|\p{Extended_Pictographic}/gu, '');
-        } catch (e) { /* ignore emoji regex error */ }
-        cleaned = cleaned.replace(/\[[^\]]*?\]|【[^】]*?】|（[^）]*?）|\([^)]*?\)/g, ''); // 处理多种括号，非贪婪匹配内部
+        
+        // 1. 基础清理（保留你的原逻辑）
+        let cleaned = text
+            .replace(/删/g, '')
+            .replace(/\p{Emoji_Presentation}|\p{Extended_Pictographic}/gu, '') // Emoji
+            .replace(/\[[^\]]*?\]|【[^】]*?】|（[^）]*?）|\([^)]*?\)/g, ''); // 括号
+    
+        // 2. 新增：彻底清理（合并到一行或使用续行符）
+        cleaned = cleaned
+            .replace(/[^\x00-\x7F]/g, '')  // 移除非ASCII字符
+            .replace(/[^\w\-\.\/\?=&]/g, ''); // 白名单过滤
+    
         return cleaned;
     }
 
