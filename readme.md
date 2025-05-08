@@ -85,15 +85,14 @@
 *   52fisher
 *   DreamNya 
 *   White
-    (改进者: Gemini,DeepSeek)
+*   Gemini
+*   DeepSeek
 
 ## 📄 许可证
 
 本脚本基于 [AGPL-3.0-or-later](https://www.gnu.org/licenses/agpl-3.0.html) 许可证发布。
 
-## 💬 支持与反馈
+## 💬 原脚本支持
 
-*   [GitHub Repository](https://github.com/syhyz1990/panAI)
-*   [Greasy Fork Script Page](https://greasyfork.org/zh-CN/scripts/452150-textlink-to-hyperlink)
-
-如果你在使用过程中遇到任何问题或有改进建议，欢迎通过以上链接进行反馈。
+*   [网盘智能识别自动填充部分](https://github.com/syhyz1990/panAI)
+*   [超链接转换部分](https://greasyfork.org/zh-CN/scripts/452150-textlink-to-hyperlink)
