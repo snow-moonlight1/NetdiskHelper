@@ -801,29 +801,29 @@
         'ee', 'eg', 'er', 'es', 'et', 'eu', 'fi', 'fj', 'fk', 'fm', 
         'fo', 'fr', 'ga', 'gd', 'ge', 'gf', 'gg', 'gh', 'gi', 'gl', 
         'gm', 'gn', 'gov', 'gp', 'gq', 'gr', 'gs', 'gt', 'gu', 
-        'gw', 'gy', 'hk', 'hm', 'hn', 'hr', 'ht', 'hu', 'id', 'ie', 
+        'gw', 'gy', 'hk', 'hm', 'hn', 'hr', 'ht', 'hu', 'ie', 
         'il', 'im', 'in', 'info', 'int', 'io', 'iq', 'ir', 'is', 
         'it', 'je', 'jm', 'jo', 'jp', 'ke', 'kg', 'kh', 'ki', 
         'km', 'kn', 'kp', 'kr', 'kw', 'ky', 'kz', 'la', 'lb', 'lc', 
         'li', 'lk', 'lr', 'ls', 'lt', 'lu', 'lv', 'ly', 'ma', 'mc', 
-        'me', 'mg', 'mh', 'mil', 'mk', 'ml', 'mm', 'mn', 'mo', 'mobi', 
+        'me', 'mg', 'mh', 'mil', 'mk', 'ml', 'mm', 'mn', 'mo',  
         'mp', 'mq', 'mr', 'ms', 'mt', 'mu', ' mv', 'mw', 'mx', 
-        'my', 'mz', 'na', 'name', 'nc', 'ne', 'net', 'nf', 'ng', 'ni', 
+        'my', 'mz', 'na', 'nc', 'ne', 'net', 'nf', 'ng', 'ni', 
         'nl', 'no', 'np', 'nr', 'nu', 'nz', 'om', 'org', 'pa', 'pe', 
         'pf', 'pg', 'ph', 'pk', 'pl', 'pm', 'pn', 'pr', 'pro', 'ps', 
-        'pt', 'pw', 'py', 'qa', 're', 'ro', 'rs', 'ru', 'rw', 'sa', 
+        'pt', 'pw', 'qa', 're', 'ro', 'rs', 'ru', 'rw', 'sa', 
         'sb', 'sc', 'sd', 'se', 'sg', 'sh', 'si', 'sj', 'sk', 'sl', 'sm', 
         'sn', 'so', 'sr', 'ss', 'st', 'su', 'sv', 'sx', 'sy', 'sz', 'tc', 
-        'td', 'tel', 'tf', 'tg', 'th', 'tj', 'tk', 'tl', 'tm', 'tn', 'to', 
+        'td', 'tel', 'tf', 'tg', 'th', 'tj', 'tk', 'tl', 'tm', 'tn', 
         'tr', 'tt', 'tv', 'tw', 'tz', 'ua', 'ug', 'uk', 'us', 'uy', 'uz', 
         'va', 'vc', 've', 'vg', 'vi', 'vn', 'vu', 'wf', 'ye', 'yt', 'za', 
-        'zm', 'zw', 'app', 'art', 'asia', 'auto', 'autos', 'biz', 'blog', 
+        'zm', 'zw', 'app','com', 'art', 'asia', 'auto', 'autos', 'biz', 'blog', 
         'buy', 'car', 'cars', 'cat', 'city', 'click', 'cloud', 'club', 'coop', 
-        'design', 'dev', 'digital', 'email', 'games', 'global', 'group', 'guru', 
+        'design', 'dev', 'digital', 'games', 'global', 'group', 'guru', 
         'icu', 'ink', 'jobs', 'link', 'live', 'media', 'museum', 'network', 'news', 
         'ngo', 'one', 'online', 'ong', 'photo', 'photos', 'pics', 'post', 'sale', 
         'shop', 'site', 'space', 'store', 'tech', 'today', 'top', 'travel', 'vip', 
-        'website', 'wiki', 'world', 'xxx', 'xyz', 'zone', 'aero', 'adult'
+        , 'wiki', 'world', 'xxx', 'xyz', 'zone', 'aero', 'adult'
     ]);
 
     /**
@@ -871,15 +871,27 @@
         }
     }
 
-    // --- Regex Definitions ---
-    // URL Regex: Find potential URL structures. TLD validation will happen *after* match.
-    // - Optional http(s)://
-    // - Capture group 1: Hostname (letters, numbers, hyphen, dot) + TLD (letters, min 2) + Optional Port + Optional Path/Query/Fragment
-    // - Hostname MUST contain at least one dot.
-    // - TLD MUST be at least 2 letters (initial filter).
-    // - Allows paths/queries/fragments with a wide range of characters ([^\s<>"]*) - greedy.
-    const urlRegex = /(?:https?:\/\/)?([\w.-]*\w+\.[a-zA-Z]{2,}(?::\d{1,5})?(?:[/?#][^\s<>"]*)?)/gu;
-
+        // URL 正则表达式：
+    // 匹配：可选协议 + 主机名.顶级域名 + 可选端口 + 可选路径/查询/片段
+    // 协议 (可选，非捕获组): (?:https?:\/\/)?
+    // 主机名和顶级域名 (捕获组 1 的核心): [\w.-]*\w+\.[a-zA-Z]{2,}
+    //   - \w 匹配字母、数字、下划线
+    //   - . 匹配点
+    //   - - 匹配连字符
+    //   - *\w+ 确保域名部分以单词字符结尾（避免 example-.com）
+    //   - \.[a-zA-Z]{2,} 确保顶级域名至少为2个字母
+    // 可选端口: (?::\d{1,5})?
+    // 可选路径/查询/片段 (改进部分):
+    //   (?:                    -- 非捕获组包裹整个路径部分
+    //     [/?#]                -- 必须以 / ? # 其中一个开始
+    //     [a-zA-Z0-9\-_~.!*'();:@&=+$,/?%#[\]]*  -- 允许的字符集，重复零次或多次
+    //                                         -- a-zA-Z0-9: 字母数字
+    //                                         -- \-_~.: 基本非保留字符和点
+    //                                         -- !*'();@&=+$,/?%#[]: 保留字符 (在路径中常用)
+    //                                         -- 注意：百分号 % 是单独处理的，因为它可以是 %HH
+    //                                         -- 我们这里简单包含它，假设后面跟的是合法编码
+    //   )?                     -- 整个路径部分是可选的
+    const urlRegex = /(?:https?:\/\/)?([\w.-]*\w+\.[a-zA-Z]{2,}(?::\d{1,5})?(?:[/?#][a-zA-Z0-9\-_~.!*'();:@&=+$,/?%#[\]]*)?)/gu;
     // Baidu Path Regex: Find potential Baidu paths starting with /s/
     const baiduPathRegex = /(\/?s\/[^\s<>"]+)/gu;
 
